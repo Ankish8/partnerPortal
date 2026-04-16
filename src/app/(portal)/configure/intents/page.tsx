@@ -27,7 +27,7 @@ const mockIntents: Intent[] = [
 ];
 
 const sourceIcons = { call: Phone, whatsapp: MessageSquare, manual: FileText };
-const sourceLabels = { call: "Call Recording", whatsapp: "WhatsApp", manual: "Manual" };
+const sourceLabels = { call: "Call", whatsapp: "WhatsApp", manual: "Manual" };
 
 export default function IntentsPage() {
   const [search, setSearch] = useState("");

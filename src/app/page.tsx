@@ -1,150 +1,209 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import {
-  Database,
-  Settings2,
-  FlaskConical,
-  Rocket,
-  BarChart3,
-  ArrowRight,
-  CheckCircle2,
-  Bot,
-  Globe,
-  FileText,
-  Phone,
-  MessageSquare,
-  Sparkles,
-} from "lucide-react";
-import Link from "next/link";
+import { useState, useRef, useEffect } from "react";
+import { ArrowUp, Paperclip } from "lucide-react";
 import { ContentPanel } from "@/components/layout/content-panel";
+import { cn } from "@/lib/utils";
 
-const steps = [
-  {
-    title: "Add Knowledge Sources",
-    description: "Import websites, documents, call recordings, or WhatsApp conversations to train your agent.",
-    href: "/ingest",
-    icon: Database,
-    completed: false,
-  },
-  {
-    title: "Configure Intents & Flows",
-    description: "Define what your agent can handle and build conversation flows with actions.",
-    href: "/configure",
-    icon: Settings2,
-    completed: false,
-  },
-  {
-    title: "Test Your Agent",
-    description: "Preview your agent in a WhatsApp-style simulator before going live.",
-    href: "/test",
-    icon: FlaskConical,
-    completed: false,
-  },
-  {
-    title: "Deploy to WhatsApp",
-    description: "Connect your WhatsApp Business account and deploy your agent.",
-    href: "/deploy",
-    icon: Rocket,
-    completed: false,
-  },
-  {
-    title: "Monitor & Optimize",
-    description: "Track performance, review conversations, and improve your agent over time.",
-    href: "/analyze",
-    icon: BarChart3,
-    completed: false,
-  },
-];
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
 
-const sourceTypes = [
-  { label: "Website", icon: Globe, description: "Crawl and index your website pages", href: "/ingest/websites" },
-  { label: "Documents", icon: FileText, description: "Upload PDFs, docs, and spreadsheets", href: "/ingest/documents" },
-  { label: "Call Recordings", icon: Phone, description: "Import and transcribe call recordings", href: "/ingest/calls" },
-  { label: "WhatsApp Chats", icon: MessageSquare, description: "Import existing WhatsApp conversations", href: "/ingest/whatsapp" },
-];
+export default function ChatPage() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-export default function GetStartedPage() {
-  const completedSteps = steps.filter((s) => s.completed).length;
-  const progress = (completedSteps / steps.length) * 100;
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 200) + "px";
+    }
+  }, [input]);
+
+  const handleSubmit = () => {
+    if (!input.trim()) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input.trim(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsTyping(true);
+
+    // Simulate assistant response
+    setTimeout(() => {
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content:
+          "I'm your AI Agent Builder assistant. I can help you set up knowledge sources, configure intents and flows, test your agent, and deploy to WhatsApp. What would you like to do?",
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+      setIsTyping(false);
+    }, 1000);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  const isEmpty = messages.length === 0;
 
   return (
     <ContentPanel>
-    <div className="mx-auto max-w-4xl px-8 py-10">
-      {/* Hero */}
-      <div className="mb-10">
-        <h1 className="font-serif text-[40px] leading-[1.15] tracking-[-0.03em]">Build your AI WhatsApp Agent</h1>
-        <p className="mt-2 text-[15px] text-muted-foreground">
-          Create intelligent agents from your business data in minutes.
-        </p>
-      </div>
+      <div className="flex h-full flex-col">
+        {isEmpty ? (
+          /* Empty state — centered prompt */
+          <div className="relative flex flex-1 flex-col items-center justify-center px-6 overflow-hidden">
+            <div className="relative flex w-full max-w-[640px] flex-col items-center">
+              <h1 className="mb-2 text-[22px] font-semibold tracking-[-0.01em] text-foreground">
+                What can I help you build?
+              </h1>
+              <p className="mb-8 text-[15px] text-muted-foreground">
+                Tell me about your business and I'll set up your AI agent.
+              </p>
 
-      {/* Progress */}
-      <Card className="mb-8">
-        <CardContent className="p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold">Setup Progress</span>
-            </div>
-            <Badge variant="secondary">
-              {completedSteps} of {steps.length} complete
-            </Badge>
-          </div>
-          <Progress value={progress} className="mb-4 h-2" />
-          <div className="space-y-1">
-            {steps.map((step, i) => (
-              <Link
-                key={step.title}
-                href={step.href}
-                className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-muted"
-              >
-                <div className="flex h-6 w-6 items-center justify-center">
-                  {step.completed ? (
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                  ) : (
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-muted-foreground/30">
-                      <span className="text-xs font-medium text-muted-foreground">{i + 1}</span>
+              {/* Input area */}
+              <div className="relative w-full">
+                <div className="relative z-10 rounded-xl border border-border/80 bg-white shadow-sm transition-shadow focus-within:border-border focus-within:shadow-md">
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask AI anything"
+                    rows={3}
+                    className="w-full resize-none bg-transparent px-4 pt-4 pb-14 text-[15px] placeholder:text-muted-foreground/50 focus:outline-none"
+                  />
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-end">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={!input.trim()}
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+                          input.trim()
+                            ? "bg-foreground text-background hover:bg-foreground/90"
+                            : "bg-muted text-muted-foreground/50 cursor-not-allowed"
+                        )}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{step.title}</p>
-                  <p className="text-xs text-muted-foreground">{step.description}</p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </Link>
-            ))}
+              </div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        ) : (
+          /* Chat messages */
+          <>
+            <div className="flex-1 overflow-y-auto px-6 pt-6">
+              <div className="mx-auto max-w-[720px] space-y-6">
+                {messages.map((message) => (
+                  <div key={message.id} className="flex gap-3">
+                    {message.role === "assistant" && (
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-background">
+                        AI
+                      </div>
+                    )}
+                    <div
+                      className={cn(
+                        "flex-1 text-[15px] leading-relaxed",
+                        message.role === "user" &&
+                          "ml-auto max-w-[80%] rounded-2xl bg-muted px-4 py-3"
+                      )}
+                    >
+                      {message.content}
+                    </div>
+                  </div>
+                ))}
+                {isTyping && (
+                  <div className="flex gap-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-background">
+                      AI
+                    </div>
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:0ms]" />
+                      <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:150ms]" />
+                      <span className="inline-block h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:300ms]" />
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
 
-      {/* Quick add sources */}
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Quick Add Knowledge Source</h2>
-        <Link href="/ingest" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          View all <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {sourceTypes.map((source) => (
-          <Link key={source.label} href={source.href}>
-            <Card className="h-full transition-shadow hover:shadow-md cursor-pointer">
-              <CardContent className="p-4">
-                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                  <source.icon className="h-4 w-4 text-primary" />
+            {/* Bottom input for chat mode */}
+            <div className="border-t border-border/40 px-6 py-4">
+              <div className="mx-auto max-w-[720px]">
+                <div className="relative rounded-xl border border-border/80 bg-white shadow-sm transition-shadow focus-within:border-border focus-within:shadow-md">
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask a follow-up..."
+                    rows={1}
+                    className="w-full resize-none bg-transparent px-4 pt-3 pb-12 text-[15px] placeholder:text-muted-foreground/50 focus:outline-none"
+                  />
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-end">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={!input.trim()}
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+                          input.trim()
+                            ? "bg-foreground text-background hover:bg-foreground/90"
+                            : "bg-muted text-muted-foreground/50 cursor-not-allowed"
+                        )}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-sm font-semibold">{source.label}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{source.description}</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
-    </div>
     </ContentPanel>
   );
 }

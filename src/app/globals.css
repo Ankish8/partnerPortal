@@ -132,4 +132,15 @@ body {
   html {
     @apply font-sans;
   }
+  button,
+  a,
+  [role="button"],
+  [type="submit"],
+  [type="reset"],
+  summary,
+  select,
+  label[for],
+  [tabindex]:not([tabindex="-1"]) {
+    cursor: pointer;
+  }
 }

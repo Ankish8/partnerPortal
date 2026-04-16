@@ -10,16 +10,27 @@ interface SlidePanelProps {
   title: string;
   children: React.ReactNode;
   learnMoreHref?: string;
+  panelClassName?: string;
+  disableBackdropClose?: boolean;
+  customHeader?: React.ReactNode;
 }
 
-export function SlidePanel({ open, onClose, title, children, learnMoreHref }: SlidePanelProps) {
+export function SlidePanel({
+  open,
+  onClose,
+  title,
+  children,
+  learnMoreHref,
+  panelClassName,
+  disableBackdropClose,
+  customHeader,
+}: SlidePanelProps) {
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (open) {
       setMounted(true);
-      // Small delay to trigger animation
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setVisible(true);
@@ -52,37 +63,40 @@ export function SlidePanel({ open, onClose, title, children, learnMoreHref }: Sl
           "absolute inset-0 bg-black/20 transition-opacity duration-300",
           visible ? "opacity-100" : "opacity-0"
         )}
-        onClick={onClose}
+        onClick={disableBackdropClose ? undefined : onClose}
       />
 
       {/* Panel */}
       <div
         className={cn(
-          "relative flex flex-col bg-white rounded-2xl shadow-2xl m-2 w-[680px] max-w-[calc(100vw-280px)] transition-transform duration-300 ease-out",
+          "relative flex flex-col bg-white rounded-2xl shadow-2xl m-2 w-[780px] max-w-[calc(100vw-280px)] transition-all duration-300 ease-out",
+          panelClassName,
           visible ? "translate-x-0" : "translate-x-full"
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 shrink-0">
-          <h2 className="text-[17px] font-semibold">{title}</h2>
-          <div className="flex items-center gap-3">
-            {learnMoreHref && (
-              <button className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors">
-                <BookOpen className="h-3.5 w-3.5" />
-                Learn more
+        {customHeader || (
+          <div className="flex items-center justify-between px-6 py-5 shrink-0">
+            <h2 className="text-[17px] font-semibold">{title}</h2>
+            <div className="flex items-center gap-3">
+              {learnMoreHref && (
+                <button className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Learn more
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors"
+              >
+                <X className="h-[18px] w-[18px] text-muted-foreground" />
               </button>
-            )}
-            <button
-              onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors"
-            >
-              <X className="h-[18px] w-[18px] text-muted-foreground" />
-            </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Content */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {children}
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/layout/app-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ConvexClientProvider } from "@/components/providers/convex-provider";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -33,12 +34,15 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${inter.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} h-full antialiased`}
     >
-      <body className="h-full bg-background text-foreground">
-        <TooltipProvider>
-          <AppShell>{children}</AppShell>
-        </TooltipProvider>
+      <body suppressHydrationWarning className="h-full bg-background text-foreground">
+        <ConvexClientProvider>
+          <TooltipProvider>
+            <AppShell>{children}</AppShell>
+          </TooltipProvider>
+        </ConvexClientProvider>
       </body>
     </html>
   );

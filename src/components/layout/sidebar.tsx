@@ -3,50 +3,40 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
-  Database,
   Settings2,
   FlaskConical,
   Rocket,
   BarChart3,
-  Globe,
-  FileText,
-  Phone,
-  MessageSquare,
-  Brain,
-  GitBranch,
-  Tags,
   BookOpen,
   ChevronRight,
-  Sparkles,
   Workflow,
+  MessageCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AnimateHeight } from "@/components/ui/animate-height";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  children?: { label: string; href: string; icon: React.ElementType }[];
+  children?: { label: string; href: string }[];
 }
 
 const navItems: NavItem[] = [
   {
     label: "Get started",
     href: "/",
-    icon: Sparkles,
+    icon: MessageCircle,
   },
   {
-    label: "Ingest",
-    href: "/ingest",
-    icon: Database,
+    label: "Train",
+    href: "/train",
+    icon: BookOpen,
     children: [
-      { label: "Knowledge Sources", href: "/ingest", icon: BookOpen },
-      { label: "Websites", href: "/ingest/websites", icon: Globe },
-      { label: "Documents", href: "/ingest/documents", icon: FileText },
-      { label: "Call Recordings", href: "/ingest/calls", icon: Phone },
-      { label: "WhatsApp Chats", href: "/ingest/whatsapp", icon: MessageSquare },
+      { label: "Content", href: "/train" },
+      { label: "Guidance", href: "/train/guidance" },
     ],
   },
   {
@@ -54,10 +44,10 @@ const navItems: NavItem[] = [
     href: "/configure",
     icon: Settings2,
     children: [
-      { label: "Intents", href: "/configure/intents", icon: Brain },
-      { label: "Flows", href: "/configure/flows", icon: GitBranch },
-      { label: "Knowledge Base", href: "/configure/knowledge", icon: BookOpen },
-      { label: "Tags", href: "/configure/tags", icon: Tags },
+      { label: "Intents", href: "/configure/intents" },
+      { label: "Flows", href: "/configure/flows" },
+      { label: "Knowledge Base", href: "/configure/knowledge" },
+      { label: "Tags", href: "/configure/tags" },
     ],
   },
   {
@@ -87,7 +77,7 @@ const bottomItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [expandedSections, setExpandedSections] = useState<string[]>(["Ingest", "Configure"]);
+  const [expandedSections, setExpandedSections] = useState<string[]>(["Train", "Configure"]);
 
   const toggleSection = (label: string) => {
     setExpandedSections((prev) =>
@@ -127,37 +117,42 @@ export function Sidebar() {
                       <span className="flex-1 text-left">{item.label}</span>
                       <ChevronRight
                         className={cn(
-                          "h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-150",
+                          "h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-200 ease-out",
                           expandedSections.includes(item.label) && "rotate-90"
                         )}
                       />
                     </button>
-                    {expandedSections.includes(item.label) && (
-                      <ul className="mt-0.5 space-y-0.5">
+                    <AnimateHeight expanded={expandedSections.includes(item.label)}>
+                      <ul className="mt-0.5 ml-[14px] pl-6">
                         {item.children.map((child) => {
                           const childActive =
                             child.href === item.href
                               ? pathname === item.href
                               : isActive(child.href);
                           return (
-                            <li key={child.href}>
+                            <li key={child.href} className="relative">
+                              <div
+                                className={cn(
+                                  "absolute left-0 top-0 bottom-0 w-[2px]",
+                                  childActive ? "bg-[#e87537]" : "bg-border"
+                                )}
+                              />
                               <Link
                                 href={child.href}
                                 className={cn(
-                                  "flex items-center gap-2.5 rounded-lg py-[6px] pl-8 pr-3 text-[13px] transition-colors hover:bg-accent",
+                                  "block py-[5px] px-3 ml-1.5 text-[13px] transition-colors hover:bg-accent rounded-lg",
                                   childActive
-                                    ? "bg-accent font-medium text-foreground"
+                                    ? "bg-accent font-semibold text-foreground"
                                     : "text-muted-foreground"
                                 )}
                               >
-                                <child.icon className="h-[15px] w-[15px] shrink-0" />
-                                <span>{child.label}</span>
+                                {child.label}
                               </Link>
                             </li>
                           );
                         })}
                       </ul>
-                    )}
+                    </AnimateHeight>
                   </>
                 ) : (
                   <Link
