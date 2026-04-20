@@ -7,16 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Brain, Plus, MoreHorizontal, Phone, MessageSquare, FileText } from "lucide-react";
 import { ContentPanel } from "@/components/layout/content-panel";
 import { useState } from "react";
-
-interface Intent {
-  id: string;
-  name: string;
-  description: string;
-  source: "call" | "whatsapp" | "manual";
-  flowLinked: boolean;
-  sampleQueries: string[];
-  confidence: number;
-}
+import { IntentDetailPanel, type Intent } from "@/components/configure/intent-detail-panel";
 
 const mockIntents: Intent[] = [
   { id: "1", name: "Appointment Booking", description: "Customer wants to schedule, reschedule, or cancel an appointment.", source: "call", flowLinked: true, sampleQueries: ["I want to book an appointment", "Can I reschedule?", "Cancel my booking"], confidence: 92 },
@@ -31,6 +22,7 @@ const sourceLabels = { call: "Call", whatsapp: "WhatsApp", manual: "Manual" };
 
 export default function IntentsPage() {
   const [search, setSearch] = useState("");
+  const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null);
   const filtered = mockIntents.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()) || i.description.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -55,7 +47,7 @@ export default function IntentsPage() {
         {filtered.map((intent) => {
           const SourceIcon = sourceIcons[intent.source];
           return (
-            <Card key={intent.id}>
+            <Card key={intent.id} className="cursor-pointer hover:border-[#e87537]/40 transition-colors" onClick={() => setSelectedIntent(intent)}>
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50 shrink-0">
@@ -90,6 +82,11 @@ export default function IntentsPage() {
         })}
       </div>
     </div>
+      <IntentDetailPanel
+        open={!!selectedIntent}
+        onClose={() => setSelectedIntent(null)}
+        intent={selectedIntent}
+      />
     </ContentPanel>
   );
 }

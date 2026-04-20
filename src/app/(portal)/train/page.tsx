@@ -30,13 +30,6 @@ import {
   MoreHorizontal,
   Circle,
   Settings,
-  RotateCcw,
-  Paperclip,
-  Smile,
-  Image,
-  Mic,
-  Bot,
-  ChevronDown,
   Check,
   RefreshCw,
   Trash2,
@@ -50,6 +43,7 @@ import { WebsiteSyncPanel } from "@/components/train/website-sync-panel";
 import { DocumentsPanel } from "@/components/train/documents-panel";
 import { CallRecordingsPanel } from "@/components/train/call-recordings-panel";
 import { WhatsAppPanel } from "@/components/train/whatsapp-panel";
+import { GuidancePreviewPanel } from "@/components/train/guidance-preview-panel";
 
 type PanelType = "website" | "documents" | "calls" | "whatsapp";
 
@@ -76,7 +70,6 @@ interface ContentSourceRow {
 
 export default function TrainPage() {
   const router = useRouter();
-  const [previewTab, setPreviewTab] = useState<"customer" | "event">("customer");
   const [activePanel, setActivePanel] = useState<PanelType | null>(null);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
@@ -349,91 +342,7 @@ export default function TrainPage() {
       </div>
 
       {/* Preview panel */}
-      <div className="flex w-[380px] shrink-0 flex-col rounded-xl bg-white">
-        {/* Preview header */}
-        <div className="flex items-center justify-between px-6 py-5">
-          <h2 className="text-[20px] font-semibold tracking-tight">Preview</h2>
-          <div className="flex items-center gap-1">
-            <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-              <Settings className="h-[18px] w-[18px] text-muted-foreground" />
-            </button>
-            <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-              <RotateCcw className="h-[18px] w-[18px] text-muted-foreground" />
-            </button>
-            <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-              <X className="h-[18px] w-[18px] text-muted-foreground" />
-            </button>
-          </div>
-        </div>
-
-        {/* Testing as */}
-        <div className="flex items-center gap-3 border-t border-border/40 px-6 py-3.5">
-          <span className="text-[13px] text-muted-foreground">Testing as</span>
-          <Button variant="outline" size="sm" className="h-8 text-[13px] gap-1.5 rounded-lg font-medium">
-            <Bot className="h-3.5 w-3.5" />
-            Preview user
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          </Button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-t border-border/40 px-2">
-          <button
-            onClick={() => setPreviewTab("customer")}
-            className={`px-4 py-3.5 text-[14px] font-medium transition-colors cursor-pointer ${
-              previewTab === "customer"
-                ? "border-b-[2.5px] border-[#e87537] text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Customer view
-          </button>
-          <button
-            onClick={() => setPreviewTab("event")}
-            className={`px-4 py-3.5 text-[14px] font-medium transition-colors cursor-pointer ${
-              previewTab === "event"
-                ? "border-b-[2.5px] border-[#e87537] text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Event log
-          </button>
-        </div>
-
-        {/* Preview content */}
-        <div className="flex flex-1 flex-col items-center justify-center px-10 text-center border-t border-border/40">
-          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-muted/60">
-            <Bot className="h-7 w-7 text-muted-foreground/70" />
-          </div>
-          <p className="text-[14px] leading-[1.6] text-muted-foreground">
-            Ask your agent a question your customers might ask, to preview its response.
-          </p>
-        </div>
-
-        {/* Input */}
-        <div className="border-t border-border/40 px-5 py-5">
-          <div className="rounded-xl border border-border/60 px-4 py-3.5">
-            <Input
-              placeholder="Ask a question..."
-              className="border-0 p-0 h-auto text-[14px] shadow-none focus-visible:ring-0"
-            />
-            <div className="mt-3 flex items-center gap-1">
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-                <Paperclip className="h-[18px] w-[18px] text-muted-foreground/60" />
-              </button>
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-                <Smile className="h-[18px] w-[18px] text-muted-foreground/60" />
-              </button>
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-                <Image className="h-[18px] w-[18px] text-muted-foreground/60" />
-              </button>
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-                <Mic className="h-[18px] w-[18px] text-muted-foreground/60" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <GuidancePreviewPanel />
 
       {/* Remove confirmation dialog */}
       <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>

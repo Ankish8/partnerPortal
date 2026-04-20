@@ -31,6 +31,7 @@ const meta: Meta<typeof Button> = {
       description: "Disables the button and applies muted styling",
     },
     children: {
+      control: "text",
       description: "Button label — can include text, icons, or both",
     },
   },
@@ -87,6 +88,7 @@ export const WithIcon: Story = {
 };
 
 export const AllVariants: Story = {
+  parameters: { controls: { disable: true } },
   render: () => (
     <div className="flex flex-wrap gap-3 items-center">
       <Button>Default</Button>
@@ -100,6 +102,7 @@ export const AllVariants: Story = {
 };
 
 export const AllSizes: Story = {
+  parameters: { controls: { disable: true } },
   render: () => (
     <div className="flex flex-wrap gap-3 items-center">
       <Button size="sm">Small</Button>
@@ -111,15 +114,16 @@ export const AllSizes: Story = {
 };
 
 export const RoundedPills: Story = {
+  parameters: { controls: { disable: true } },
   render: () => (
     <div className="flex flex-wrap gap-3 items-center">
-      <Button variant="secondary" size="sm" className="rounded-full">
+      <Button variant="secondary" className="rounded-full">
         <Plus className="h-4 w-4" /> New
       </Button>
-      <Button variant="outline" size="sm" className="rounded-full">
+      <Button variant="outline" className="rounded-full">
         Cancel
       </Button>
-      <Button size="sm" className="rounded-full bg-emerald-700 text-white hover:bg-emerald-800">
+      <Button className="rounded-full bg-emerald-700 text-white hover:bg-emerald-800">
         Enable
       </Button>
     </div>

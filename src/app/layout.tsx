@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/layout/app-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ToastProvider } from "@/components/ui/toast";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
 
 const inter = Inter({
@@ -40,7 +41,9 @@ export default function RootLayout({
       <body suppressHydrationWarning className="h-full bg-background text-foreground">
         <ConvexClientProvider>
           <TooltipProvider>
-            <AppShell>{children}</AppShell>
+            <ToastProvider>
+              <AppShell>{children}</AppShell>
+            </ToastProvider>
           </TooltipProvider>
         </ConvexClientProvider>
       </body>

@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "allowJs": true,
+    "skipLibCheck": true,
     "strict": true,
     "moduleResolution": "bundler",
     "jsx": "react-jsx",

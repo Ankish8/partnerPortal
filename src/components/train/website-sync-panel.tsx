@@ -15,7 +15,6 @@ import {
   ChevronDown,
   Plus,
   X,
-  Circle,
   RefreshCw,
   FileText,
   Settings2,
@@ -75,13 +74,7 @@ function SeeTips({ tips }: { tips: readonly string[] }) {
       >
         See tips.
       </TooltipTrigger>
-      <TooltipContent
-        side="bottom"
-        align="start"
-        showArrow={false}
-        sideOffset={8}
-        className="max-w-[280px] !bg-white !text-foreground border border-border/60 shadow-lg !rounded-xl !px-5 !py-4"
-      >
+      <TooltipContent side="bottom" align="start" className="max-w-[280px] px-5 py-4">
         <ul className="list-disc pl-4 space-y-1.5">
           {tips.map((tip, i) => (
             <li key={i} className="text-[13px] leading-relaxed">
@@ -180,6 +173,12 @@ export function WebsiteSyncPanel({
     return existingSyncUrls.some((u) => normalizeUrl(u) === normalized);
   }, [websiteUrl, existingSyncUrls]);
 
+  // Crawl settings
+  const [crawlDepth, setCrawlDepth] = useState(2);
+  const [maxPages, setMaxPages] = useState(10);
+  const [ignorePatterns, setIgnorePatterns] = useState("");
+  const [showCrawlSettings, setShowCrawlSettings] = useState(false);
+
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [additionalUrls, setAdditionalUrls] = useState<string[]>([]);
@@ -214,6 +213,10 @@ export function WebsiteSyncPanel({
       setExpandedPages(new Set());
       setCompletedSteps(new Set());
       setSourceTitle("");
+      setCrawlDepth(2);
+      setMaxPages(10);
+      setIgnorePatterns("");
+      setShowCrawlSettings(false);
       setShowAdvanced(false);
       setAdditionalUrls([]);
       setExcludeUrls([]);
@@ -311,7 +314,7 @@ export function WebsiteSyncPanel({
       const res = await fetch("/api/crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: normalizedUrl, limit: 50 }),
+        body: JSON.stringify({ url: normalizedUrl, limit: maxPages }),
       });
 
       const data = await res.json();
@@ -429,9 +432,32 @@ export function WebsiteSyncPanel({
   const pageTree = useMemo(() => {
     if (crawl.pages.length === 0) return [];
     const root = crawl.pages[0];
-    const children = crawl.pages.slice(1);
+    let children = crawl.pages.slice(1);
+
+    // Filter by crawl depth relative to root URL
+    try {
+      const rootDepth = new URL(root.url).pathname.split("/").filter(Boolean).length;
+      children = children.filter((p) => {
+        try {
+          const depth = new URL(p.url).pathname.split("/").filter(Boolean).length;
+          return depth - rootDepth < crawlDepth;
+        } catch { return true; }
+      });
+    } catch { /* keep all */ }
+
+    // Filter by ignore patterns
+    const patterns = ignorePatterns.split(",").map((p) => p.trim()).filter(Boolean);
+    if (patterns.length > 0) {
+      children = children.filter((p) => {
+        try {
+          const pathname = new URL(p.url).pathname;
+          return !patterns.some((pat) => pathname.startsWith(pat));
+        } catch { return true; }
+      });
+    }
+
     return [{ ...root, children }];
-  }, [crawl.pages]);
+  }, [crawl.pages, crawlDepth, ignorePatterns]);
 
   const filteredAdditionalUrls = additionalUrls.filter(Boolean);
   const filteredExcludeUrls = excludeUrls.filter(Boolean);
@@ -569,27 +595,76 @@ export function WebsiteSyncPanel({
                 </div>
               )}
             </div>
+
+            {/* Crawl Settings */}
+            <div className="mt-8">
+              <button
+                onClick={() => setShowCrawlSettings(!showCrawlSettings)}
+                className="flex items-center gap-1.5 text-[14px] font-semibold hover:text-foreground transition-colors cursor-pointer"
+              >
+                <Settings2 className="h-4 w-4" />
+                Crawl Settings
+                {showCrawlSettings ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </button>
+
+              {showCrawlSettings && (
+                <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 p-5">
+                  <div className="grid grid-cols-2 gap-5 mb-5">
+                    <div>
+                      <h4 className="text-[14px] font-semibold mb-1.5">Crawl Depth</h4>
+                      <input
+                        type="number"
+                        min={1}
+                        max={3}
+                        value={crawlDepth}
+                        onChange={(e) => setCrawlDepth(Math.min(3, Math.max(1, Number(e.target.value) || 1)))}
+                        className="w-full rounded-lg border border-border/60 px-3 py-2.5 text-[14px] outline-none bg-white focus:border-[#e87537]/50 focus:ring-1 focus:ring-[#e87537]/20 transition-colors"
+                      />
+                      <p className="text-[12px] text-muted-foreground mt-1.5">
+                        How deep to crawl the Primary Website URL (1-3 levels)
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="text-[14px] font-semibold mb-1.5">Max Pages</h4>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={maxPages}
+                        onChange={(e) => setMaxPages(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
+                        className="w-full rounded-lg border border-border/60 px-3 py-2.5 text-[14px] outline-none bg-white focus:border-[#e87537]/50 focus:ring-1 focus:ring-[#e87537]/20 transition-colors"
+                      />
+                      <p className="text-[12px] text-muted-foreground mt-1.5">
+                        Maximum pages to process from the Primary Website URL
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-[14px] font-semibold mb-1.5">Ignore Patterns</h4>
+                    <p className="text-[12px] text-muted-foreground mb-2">
+                      URL patterns to skip during Primary Website URL crawling (comma-separated, must start with &apos;/&apos;)
+                    </p>
+                    <input
+                      type="text"
+                      value={ignorePatterns}
+                      onChange={(e) => setIgnorePatterns(e.target.value)}
+                      className="w-full rounded-lg border border-border/60 px-3 py-2.5 text-[14px] outline-none bg-white focus:border-[#e87537]/50 focus:ring-1 focus:ring-[#e87537]/20 transition-colors"
+                      placeholder="/blog,/admin,/private"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* ─── PAGES TAB ─── */}
         {activeTab === "Pages" && (
           <div className="flex flex-col p-6">
-            {/* Title field */}
-            <div className="mb-6">
-              <h3 className="text-[14px] font-semibold mb-2">Title</h3>
-              <div className="flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2.5">
-                <Circle className="h-3 w-3 fill-violet-500 text-violet-500 shrink-0" />
-                <input
-                  type="text"
-                  value={sourceTitle}
-                  onChange={(e) => setSourceTitle(e.target.value)}
-                  className="flex-1 text-[14px] outline-none bg-transparent"
-                  placeholder="Source title"
-                />
-              </div>
-            </div>
-
             {/* Review pages to sync */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-1">

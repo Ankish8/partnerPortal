@@ -1,6 +1,7 @@
 "use client";
 
 import { SlidePanel } from "@/components/ui/slide-panel";
+import { SlidePanelFooter } from "@/components/ui/slide-panel-footer";
 import { Button } from "@/components/ui/button";
 import {
   Globe,
@@ -160,8 +161,7 @@ export function KnowledgeDetailPanel({ open, onClose, entry }: Props) {
         </div>
       </div>
 
-      {/* Footer actions */}
-      <div className="border-t px-6 py-4 flex items-center justify-end gap-3 shrink-0">
+      <SlidePanelFooter>
         <Button
           variant="outline"
           size="sm"
@@ -189,7 +189,7 @@ export function KnowledgeDetailPanel({ open, onClose, entry }: Props) {
             Activate
           </Button>
         )}
-      </div>
+      </SlidePanelFooter>
     </SlidePanel>
   );
 }

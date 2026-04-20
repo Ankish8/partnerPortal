@@ -1,22 +1,17 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { uploadFileToConvex } from "@/lib/convex-upload";
 import { SlidePanel } from "@/components/ui/slide-panel";
 import { Button } from "@/components/ui/button";
-import { cn, formatFileSize } from "@/lib/utils";
-import {
-  Phone,
-  X,
-  Mic,
-  Loader2,
-  Check,
-  AlertCircle,
-  Clock,
-  Play,
-} from "lucide-react";
+import { DropZone } from "@/components/train/drop-zone";
+import { UploadStatusIndicator } from "@/components/ui/upload-status";
+import { UploadProgress } from "@/components/ui/upload-progress";
+import { SlidePanelFooter } from "@/components/ui/slide-panel-footer";
+import { formatFileSize } from "@/lib/utils";
+import { Mic, Clock, Play } from "lucide-react";
 
 interface UploadingRecording {
   id: string;
@@ -45,8 +40,6 @@ export function CallRecordingsPanel({
   onClose,
 }: CallRecordingsPanelProps) {
   const [recordings, setRecordings] = useState<UploadingRecording[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const generateUploadUrl = useMutation(api.callRecordings.generateUploadUrl);
   const createRecording = useMutation(api.callRecordings.create);
@@ -109,20 +102,10 @@ export function CallRecordingsPanel({
   );
 
   const handleFiles = useCallback(
-    (fileList: FileList | null) => {
-      if (!fileList) return;
+    (fileList: FileList) => {
       Array.from(fileList).forEach((file) => uploadFile(file));
     },
     [uploadFile]
-  );
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      handleFiles(e.dataTransfer.files);
-    },
-    [handleFiles]
   );
 
   const removeRecording = (id: string) => {
@@ -133,7 +116,6 @@ export function CallRecordingsPanel({
 
   const handleClose = () => {
     setRecordings([]);
-    setIsDragging(false);
     onClose();
   };
 
@@ -150,39 +132,14 @@ export function CallRecordingsPanel({
 
         {/* Upload area */}
         <div className="px-6 pb-5">
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={cn(
-              "flex flex-col items-center justify-center rounded-xl border-2 border-dashed py-12 px-6 text-center transition-colors cursor-pointer",
-              isDragging
-                ? "border-[#e87537] bg-[#e87537]/5"
-                : "border-border/60 hover:border-border hover:bg-muted/20"
-            )}
-          >
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted/60">
-              <Mic className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-[14px] font-medium mb-1">
-              {isDragging ? "Drop recordings here" : "Click to upload or drag and drop"}
-            </p>
-            <p className="text-[12px] text-muted-foreground">
-              MP3, WAV, M4A, OGG, WebM, MP4 up to 100MB each
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ACCEPTED_AUDIO.join(",")}
-              className="hidden"
-              onChange={(e) => handleFiles(e.target.files)}
-            />
-          </div>
+          <DropZone
+            accept={ACCEPTED_AUDIO.join(",")}
+            onFiles={handleFiles}
+            icon={<Mic className="h-5 w-5 text-muted-foreground" />}
+            primaryText="Click to upload or drag and drop"
+            draggingText="Drop recordings here"
+            secondaryText="MP3, WAV, M4A, OGG, WebM, MP4 up to 100MB each"
+          />
         </div>
 
         {/* Recording list */}
@@ -220,37 +177,13 @@ export function CallRecordingsPanel({
                       </span>
                     </div>
                     {rec.status === "uploading" && (
-                      <div className="mt-1.5 h-1 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-[#e87537] transition-all duration-300"
-                          style={{ width: `${rec.progress}%` }}
-                        />
-                      </div>
+                      <UploadProgress progress={rec.progress} className="mt-1.5" />
                     )}
                   </div>
-                  <div className="shrink-0 flex items-center gap-2">
-                    {rec.status === "uploading" && (
-                      <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
-                    )}
-                    {rec.status === "transcribing" && (
-                      <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Transcribing
-                      </span>
-                    )}
-                    {rec.status === "ready" && (
-                      <Check className="h-4 w-4 text-emerald-500" />
-                    )}
-                    {rec.status === "error" && (
-                      <AlertCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <button
-                      onClick={() => removeRecording(rec.id)}
-                      className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted transition-colors cursor-pointer"
-                    >
-                      <X className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-                  </div>
+                  <UploadStatusIndicator
+                    status={rec.status}
+                    onRemove={() => removeRecording(rec.id)}
+                  />
                 </div>
               ))}
             </div>
@@ -260,15 +193,13 @@ export function CallRecordingsPanel({
         {/* Empty state */}
         {recordings.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-            <Phone className="h-8 w-8 text-muted-foreground/40 mb-3" />
             <p className="text-[13px] text-muted-foreground">
               No recordings added yet. Upload audio files to get started.
             </p>
           </div>
         )}
 
-        {/* Footer */}
-        <div className="shrink-0 border-t border-border/60 px-6 py-4 flex items-center justify-end gap-3">
+        <SlidePanelFooter>
           <Button
             variant="outline"
             size="sm"
@@ -285,7 +216,7 @@ export function CallRecordingsPanel({
           >
             Done
           </Button>
-        </div>
+        </SlidePanelFooter>
       </div>
     </SlidePanel>
   );

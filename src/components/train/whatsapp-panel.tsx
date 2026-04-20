@@ -1,22 +1,17 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { uploadFileToConvex } from "@/lib/convex-upload";
 import { SlidePanel } from "@/components/ui/slide-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DropZone } from "@/components/train/drop-zone";
+import { UploadStatusIndicator } from "@/components/ui/upload-status";
+import { SlidePanelFooter } from "@/components/ui/slide-panel-footer";
 import { cn } from "@/lib/utils";
-import {
-  MessageSquare,
-  X,
-  Loader2,
-  Check,
-  AlertCircle,
-  Users,
-  Calendar,
-} from "lucide-react";
+import { MessageSquare, Users, Calendar } from "lucide-react";
 
 type Tab = "upload" | "connect";
 
@@ -36,10 +31,8 @@ interface WhatsAppPanelProps {
 export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>("upload");
   const [chats, setChats] = useState<ImportingChat[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const generateUploadUrl = useMutation(api.whatsappChats.generateUploadUrl);
   const createFromUpload = useMutation(api.whatsappChats.createFromUpload);
@@ -94,20 +87,10 @@ export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
   );
 
   const handleFiles = useCallback(
-    (fileList: FileList | null) => {
-      if (!fileList) return;
+    (fileList: FileList) => {
       Array.from(fileList).forEach((file) => importChat(file));
     },
     [importChat]
-  );
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      handleFiles(e.dataTransfer.files);
-    },
-    [handleFiles]
   );
 
   const removeChat = (id: string) => {
@@ -118,7 +101,6 @@ export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
 
   const handleClose = () => {
     setChats([]);
-    setIsDragging(false);
     setApiKey("");
     setPhoneNumber("");
     onClose();
@@ -167,41 +149,14 @@ export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
 
             {/* Upload area */}
             <div className="px-6 pb-5">
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={cn(
-                  "flex flex-col items-center justify-center rounded-xl border-2 border-dashed py-12 px-6 text-center transition-colors cursor-pointer",
-                  isDragging
-                    ? "border-[#e87537] bg-[#e87537]/5"
-                    : "border-border/60 hover:border-border hover:bg-muted/20"
-                )}
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
-                  <MessageSquare className="h-5 w-5 text-emerald-600" />
-                </div>
-                <p className="text-[14px] font-medium mb-1">
-                  {isDragging
-                    ? "Drop chat exports here"
-                    : "Upload WhatsApp chat exports"}
-                </p>
-                <p className="text-[12px] text-muted-foreground">
-                  .txt or .zip files exported from WhatsApp
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".txt,.zip"
-                  className="hidden"
-                  onChange={(e) => handleFiles(e.target.files)}
-                />
-              </div>
+              <DropZone
+                accept=".txt,.zip"
+                onFiles={handleFiles}
+                icon={<MessageSquare className="h-5 w-5 text-muted-foreground" />}
+                primaryText="Upload WhatsApp chat exports"
+                draggingText="Drop chat exports here"
+                secondaryText=".txt or .zip files exported from WhatsApp"
+              />
             </div>
 
             {/* How to export */}
@@ -259,23 +214,10 @@ export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
                           </p>
                         )}
                       </div>
-                      <div className="shrink-0 flex items-center gap-2">
-                        {chat.status === "processing" && (
-                          <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
-                        )}
-                        {chat.status === "ready" && (
-                          <Check className="h-4 w-4 text-emerald-500" />
-                        )}
-                        {chat.status === "error" && (
-                          <AlertCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <button
-                          onClick={() => removeChat(chat.id)}
-                          className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-muted transition-colors cursor-pointer"
-                        >
-                          <X className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      </div>
+                      <UploadStatusIndicator
+                        status={chat.status === "processing" ? "uploading" : chat.status}
+                        onRemove={() => removeChat(chat.id)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -285,7 +227,6 @@ export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
             {/* Empty state */}
             {chats.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-                <MessageSquare className="h-8 w-8 text-muted-foreground/40 mb-3" />
                 <p className="text-[13px] text-muted-foreground">
                   No chats imported yet. Upload exported chat files to get started.
                 </p>
@@ -348,8 +289,7 @@ export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
           </div>
         )}
 
-        {/* Footer */}
-        <div className="shrink-0 border-t border-border/60 px-6 py-4 flex items-center justify-end gap-3">
+        <SlidePanelFooter>
           <Button
             variant="outline"
             size="sm"
@@ -377,7 +317,7 @@ export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
               Connect WhatsApp
             </Button>
           )}
-        </div>
+        </SlidePanelFooter>
       </div>
     </SlidePanel>
   );

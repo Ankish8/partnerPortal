@@ -4,14 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { AnimateHeight } from "@/components/ui/animate-height";
+import { SlidePanel } from "@/components/ui/slide-panel";
+import { GuidancePreviewPanel } from "@/components/train/guidance-preview-panel";
+import { TemplatesModal, COMMUNICATION_STYLE_TEMPLATES } from "@/components/train/templates-modal";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { useToast } from "@/components/ui/toast";
 import {
   Search,
   SlidersHorizontal,
   ChevronDown,
-  ChevronRight,
   MessageSquare,
   HelpCircle,
   Shield,
@@ -31,38 +39,37 @@ import {
   Square,
   Briefcase,
   Laugh,
-  Settings,
-  RotateCcw,
-  Bot,
-  Paperclip,
-  Image,
-  Mic,
   Compass,
   MoreHorizontal,
+  Sparkles,
+  Code,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface GuidanceItem {
   id: string;
+  _id?: Id<"guidanceItems">;
   title: string;
   content: string;
   enabled: boolean;
   isNew?: boolean;
   audience: string;
   channels: string;
+  categoryId?: string;
   stats: { used: number; resolved: number | null; escalated: number | null };
 }
 
-interface GuidanceCategory {
+interface CategoryDef {
   id: string;
   title: string;
   description: string;
   icon: React.ElementType;
   iconBg: string;
   iconColor: string;
-  /** "full" = each item renders as a full card; "pills" = compact pill buttons */
-  displayMode: "full" | "pills";
+}
+
+interface GuidanceCategory extends CategoryDef {
   items: GuidanceItem[];
 }
 
@@ -71,7 +78,7 @@ type LengthOption = "concise" | "standard" | "thorough";
 
 // ─── Mock Data ───────────────────────────────────────────────────────────────
 
-const initialCategories: GuidanceCategory[] = [
+const CATEGORIES: CategoryDef[] = [
   {
     id: "communication",
     title: "Communication style",
@@ -79,26 +86,6 @@ const initialCategories: GuidanceCategory[] = [
     icon: MessageSquare,
     iconBg: "bg-gray-700",
     iconColor: "text-white",
-    displayMode: "full" as const,
-    items: [
-      {
-        id: "comm-1",
-        title: "Shopping Assistant",
-        content: `You are a helpful and persuasive shopping assistant. Your goal is to guide customers toward making a purchase. ALWAYS:
-- Greet customers warmly and keep responses short and easy to follow.
-- At the end of every direct answer, ask an exploratory follow-up question.
-- Ask clarifying questions to understand customer preferences and budget.
-- Recommend specific products that match their needs, highlighting benefits and value.
-- When appropriate, suggest complementary items to increase basket size.
-- Use positive and reassuring language to build confidence, but DO NOT over-reassure.
-- Ask no more than 2 questions at once, so it doesn't feel like an interrogation.`,
-        enabled: false,
-        isNew: true,
-        audience: "Everyone",
-        channels: "All channels",
-        stats: { used: 0, resolved: null, escalated: null },
-      },
-    ],
   },
   {
     id: "context",
@@ -107,36 +94,6 @@ const initialCategories: GuidanceCategory[] = [
     icon: HelpCircle,
     iconBg: "bg-gray-700",
     iconColor: "text-white",
-    displayMode: "pills" as const,
-    items: [
-      {
-        id: "ctx-1",
-        title: "Clarify age for eligibility",
-        content: "When a customer asks about eligibility for a service, always ask their age first before providing information about age-restricted services.",
-        enabled: true,
-        audience: "Everyone",
-        channels: "All channels",
-        stats: { used: 12, resolved: 8, escalated: 2 },
-      },
-      {
-        id: "ctx-2",
-        title: "Clarify platform for troubleshooting",
-        content: "When a customer reports a technical issue, ask which platform they are using (iOS, Android, Web) before suggesting troubleshooting steps.",
-        enabled: true,
-        audience: "Everyone",
-        channels: "All channels",
-        stats: { used: 34, resolved: 28, escalated: 3 },
-      },
-      {
-        id: "ctx-3",
-        title: "Clarify brief messages",
-        content: "When a customer sends a very short or ambiguous message, ask a clarifying question instead of guessing the intent. For example, if they say 'help', ask 'What do you need help with today?'",
-        enabled: true,
-        audience: "Everyone",
-        channels: "All channels",
-        stats: { used: 56, resolved: 45, escalated: 5 },
-      },
-    ],
   },
   {
     id: "content",
@@ -145,36 +102,6 @@ const initialCategories: GuidanceCategory[] = [
     icon: BookOpen,
     iconBg: "bg-gray-700",
     iconColor: "text-white",
-    displayMode: "pills" as const,
-    items: [
-      {
-        id: "src-1",
-        title: "Troubleshoot connection issues with sni...",
-        content: "When customers report connection issues, always reference the 'Connection Troubleshooting Guide' article and walk them through the SNI configuration steps before escalating.",
-        enabled: true,
-        audience: "Everyone",
-        channels: "All channels",
-        stats: { used: 23, resolved: 18, escalated: 3 },
-      },
-      {
-        id: "src-2",
-        title: "Guide 2FA setup with help con...",
-        content: "When customers ask about setting up two-factor authentication, direct them to the help center article on 2FA setup and offer to walk them through each step.",
-        enabled: true,
-        audience: "Everyone",
-        channels: "All channels",
-        stats: { used: 15, resolved: 12, escalated: 1 },
-      },
-      {
-        id: "src-3",
-        title: "Link troubleshooting guide for payment fail...",
-        content: "When customers experience payment failures, always link to the payment troubleshooting guide and ask for the error code they received.",
-        enabled: true,
-        audience: "Everyone",
-        channels: "All channels",
-        stats: { used: 41, resolved: 35, escalated: 4 },
-      },
-    ],
   },
   {
     id: "spam",
@@ -183,8 +110,6 @@ const initialCategories: GuidanceCategory[] = [
     icon: Shield,
     iconBg: "bg-gray-700",
     iconColor: "text-white",
-    displayMode: "pills" as const,
-    items: [],
   },
 ];
 
@@ -204,20 +129,36 @@ const lengthOptions: { value: LengthOption; label: string; icon: React.ElementTy
   { value: "thorough", label: "Thorough", icon: AlignJustify },
 ];
 
-function BasicsCard() {
+function BasicsCard({
+  savedTone,
+  savedLength,
+  onSave,
+}: {
+  savedTone: ToneOption;
+  savedLength: LengthOption;
+  onSave: (tone: ToneOption, length: LengthOption) => void | Promise<void>;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const [tone, setTone] = useState<ToneOption>("friendly");
-  const [length, setLength] = useState<LengthOption>("standard");
-  const [savedTone, setSavedTone] = useState<ToneOption>("friendly");
-  const [savedLength, setSavedLength] = useState<LengthOption>("standard");
+  const [tone, setTone] = useState<ToneOption>(savedTone);
+  const [length, setLength] = useState<LengthOption>(savedLength);
+  const toast = useToast();
+
+  useEffect(() => {
+    setTone(savedTone);
+    setLength(savedLength);
+  }, [savedTone, savedLength]);
 
   const toneLabel = toneOptions.find((t) => t.value === savedTone)?.label || "";
   const lengthLabel = lengthOptions.find((l) => l.value === savedLength)?.label || "";
 
   const handleSave = () => {
-    setSavedTone(tone);
-    setSavedLength(length);
+    onSave(tone, length);
     setExpanded(false);
+    toast.add({
+      title: "Basics saved",
+      description: "Tone and answer length updated.",
+      data: { variant: "success" },
+    });
   };
 
   const handleCancel = () => {
@@ -305,16 +246,12 @@ function BasicsCard() {
               These settings apply to WhatsApp and Chat channels
             </p>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="text-[13px]" onClick={handleCancel} disabled={!hasChanges}>
+              <Button variant="secondary" size="sm" className="rounded-full text-[13px]" onClick={handleCancel} disabled={!hasChanges}>
                 Cancel
               </Button>
               <Button
-                variant={hasChanges ? "default" : "outline"}
                 size="sm"
-                className={cn(
-                  "text-[13px]",
-                  hasChanges && "bg-emerald-700 text-white hover:bg-emerald-800"
-                )}
+                className="rounded-full text-[13px]"
                 onClick={handleSave}
                 disabled={!hasChanges}
               >
@@ -457,9 +394,9 @@ function GuidanceItemExpanded({
   );
 }
 
-// ─── Guidance Item — Collapsed Row ───────────────────────────────────────────
+// ─── Guidance Item — Table Row ──────────────────────────────────────────────
 
-function GuidanceItemRow({
+function GuidanceItemTableRow({
   item,
   onExpand,
   isLast,
@@ -472,38 +409,30 @@ function GuidanceItemRow({
     <button
       onClick={onExpand}
       className={cn(
-        "w-full text-left px-5 py-4 hover:bg-muted/30 transition-colors group cursor-pointer",
-        !isLast && "border-b border-border/60"
+        "w-full text-left grid grid-cols-[1fr_80px_60px_80px_80px] items-center gap-4 px-5 py-3.5 hover:bg-muted/30 transition-colors group cursor-pointer",
+        !isLast && "border-b border-border/40"
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className="text-[15px] font-bold">{item.title}</span>
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-[12px] font-normal",
-                item.enabled
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : ""
-              )}
-            >
-              {item.enabled ? "Enabled" : "Not enabled"}
-            </Badge>
-            <Badge variant="outline" className="text-[12px] font-normal">
-              {item.audience} on {item.channels}
-            </Badge>
-          </div>
-          <p className="text-[13px] text-muted-foreground mb-1.5">
-            Used: <span className="font-semibold text-foreground">{item.stats.used}</span> &bull; Resolved:{" "}
-            <span className="font-semibold text-foreground">{item.stats.resolved ?? "—"}</span> &bull; Escalated:{" "}
-            <span className="font-semibold text-foreground">{item.stats.escalated ?? "—"}</span>
-          </p>
-          <p className="text-[14px] text-muted-foreground line-clamp-2">{item.content}</p>
-        </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0 mt-1 group-hover:text-foreground transition-colors" />
+      <div className="min-w-0">
+        <p className="text-[14px] font-medium truncate">{item.title}</p>
+        <p className="text-[13px] text-muted-foreground line-clamp-1 mt-0.5">{item.content}</p>
       </div>
+      <div>
+        <Badge
+          variant="outline"
+          className={cn(
+            "text-[12px] font-normal",
+            item.enabled
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : ""
+          )}
+        >
+          {item.enabled ? "Live" : "Draft"}
+        </Badge>
+      </div>
+      <span className="text-[14px] text-muted-foreground">{item.stats.used}</span>
+      <span className="text-[14px] text-muted-foreground">{item.stats.resolved ?? "--"}</span>
+      <span className="text-[14px] text-muted-foreground">{item.stats.escalated ?? "--"}</span>
     </button>
   );
 }
@@ -512,17 +441,14 @@ function GuidanceItemRow({
 
 function GuidanceCategorySection({
   category,
-  onUpdateItem,
-  onDeleteItem,
+  onSelectItem,
   onAddItem,
 }: {
   category: GuidanceCategory;
-  onUpdateItem: (categoryId: string, item: GuidanceItem) => void;
-  onDeleteItem: (categoryId: string, itemId: string) => void;
+  onSelectItem: (categoryId: string, item: GuidanceItem) => void;
   onAddItem: (categoryId: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const Icon = category.icon;
 
   return (
@@ -530,149 +456,424 @@ function GuidanceCategorySection({
       {/* Category header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-start gap-3 w-full text-left group mb-3 cursor-pointer"
+        className="flex items-center gap-3 w-full text-left group mb-3 cursor-pointer"
       >
         <div className={cn("flex h-9 w-9 items-center justify-center rounded-full shrink-0", category.iconBg)}>
           <Icon className={cn("h-[18px] w-[18px]", category.iconColor)} strokeWidth={2.5} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p className="text-[15px] font-bold">{category.title}</p>
-            <ChevronDown
-              className={cn(
-                "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
-                collapsed && "-rotate-90"
-              )}
-            />
-          </div>
+          <p className="text-[15px] font-bold">{category.title}</p>
           <p className="text-[14px] text-muted-foreground mt-0.5">{category.description}</p>
         </div>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200",
+            collapsed && "-rotate-90"
+          )}
+        />
       </button>
 
       {/* Items */}
       <AnimateHeight expanded={!collapsed}>
-        <div className="ml-12">
-          {/* Full card items (Communication style) */}
-          {category.displayMode === "full" && category.items.length > 0 && (
-            <div className="space-y-2 mb-2">
-              {category.items.map((item) =>
-                expandedItemId === item.id ? (
-                  <GuidanceItemExpanded
-                    key={item.id}
-                    item={item}
-                    onSave={(updated) => onUpdateItem(category.id, updated)}
-                    onDelete={(id) => {
-                      onDeleteItem(category.id, id);
-                      setExpandedItemId(null);
-                    }}
-                    onClose={() => setExpandedItemId(null)}
-                  />
-                ) : (
-                  <div key={item.id} className="rounded-xl border border-border/60 overflow-hidden">
-                    <GuidanceItemRow
-                      item={item}
-                      onExpand={() => setExpandedItemId(item.id)}
-                      isLast={true}
-                    />
-                  </div>
-                )
-              )}
-            </div>
-          )}
-
-          {/* Pill-style items (Context, Content, Spam) */}
-          {category.displayMode === "pills" && (
-            <div className="flex items-center gap-2.5 flex-wrap">
-              {/* + New button first */}
-              <button
-                onClick={() => onAddItem(category.id)}
-                className="inline-flex items-center gap-1 rounded-full bg-muted/70 px-3 py-1.5 text-[14px] text-foreground hover:bg-muted transition-colors cursor-pointer"
-              >
-                <Plus className="h-4 w-4" />
-                New
-              </button>
-              {category.items.map((item) => (
-                <button
+        <div>
+          {category.items.length > 0 ? (
+            <div className="rounded-lg border border-border/60 overflow-hidden mb-2">
+              <div className="grid grid-cols-[1fr_80px_60px_80px_80px] items-center gap-4 px-5 py-2.5 border-b border-border/60">
+                <span className="text-[13px] font-medium text-muted-foreground">Name</span>
+                <span className="text-[13px] font-medium text-muted-foreground">Status</span>
+                <span className="text-[13px] font-medium text-muted-foreground">Used</span>
+                <span className="text-[13px] font-medium text-muted-foreground">Resolved</span>
+                <span className="text-[13px] font-medium text-muted-foreground">Routed</span>
+              </div>
+              {category.items.map((item, i) => (
+                <GuidanceItemTableRow
                   key={item.id}
-                  onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
-                  className="inline-flex items-center rounded-full border border-border px-3.5 py-1.5 text-[14px] text-foreground hover:bg-muted/30 transition-colors cursor-pointer max-w-[280px] truncate"
-                >
-                  {item.title}
-                </button>
+                  item={item}
+                  onExpand={() => onSelectItem(category.id, item)}
+                  isLast={i === category.items.length - 1}
+                />
               ))}
-              {category.items.length > 3 && (
-                <button className="inline-flex items-center justify-center rounded-full border border-border px-2.5 py-1.5 text-[14px] text-muted-foreground hover:bg-muted/30 transition-colors cursor-pointer">
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border/60 py-6 px-5 text-center mb-2">
+              <p className="text-[13px] text-muted-foreground">
+                No guidelines yet. Click New to create one.
+              </p>
             </div>
           )}
 
-          {/* Expanded pill item */}
-          {category.displayMode === "pills" && expandedItemId && category.items.find((i) => i.id === expandedItemId) && (
-            <div className="mt-3">
-              <GuidanceItemExpanded
-                item={category.items.find((i) => i.id === expandedItemId)!}
-                onSave={(updated) => onUpdateItem(category.id, updated)}
-                onDelete={(id) => {
-                  onDeleteItem(category.id, id);
-                  setExpandedItemId(null);
-                }}
-                onClose={() => setExpandedItemId(null)}
-              />
-            </div>
-          )}
-
-          {/* + New button for full-display categories */}
-          {category.displayMode === "full" && (
-            <button
-              onClick={() => onAddItem(category.id)}
-              className="inline-flex items-center gap-1 rounded-full bg-muted/70 px-3 py-1.5 text-[14px] text-foreground hover:bg-muted transition-colors cursor-pointer"
-            >
-              <Plus className="h-4 w-4" />
-              New
-            </button>
-          )}
+          <Button
+            variant="secondary"
+            className="rounded-full mt-2"
+            onClick={() => onAddItem(category.id)}
+          >
+            <Plus className="h-4 w-4" />
+            New
+          </Button>
         </div>
       </AnimateHeight>
     </div>
   );
 }
 
+// ─── Guidance Detail Panel (SlidePanel from right) ──────────────────────────
+
+function GuidanceDetailPanel({
+  open,
+  item,
+  onClose,
+  onSave,
+  onDelete,
+  personality,
+}: {
+  open: boolean;
+  item: GuidanceItem | null;
+  onClose: () => void;
+  onSave: (updated: GuidanceItem) => void;
+  onDelete: (id: string) => void;
+  personality?: { tone?: string; length?: string };
+}) {
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editEnabled, setEditEnabled] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(true);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+
+  useEffect(() => {
+    if (item) {
+      setEditTitle(item.title);
+      setEditContent(item.content);
+      setEditEnabled(item.enabled);
+      setPreviewVisible(true);
+    }
+  }, [item]);
+
+  if (!item) return null;
+
+  const titleEmpty = !editTitle.trim();
+  const contentEmpty = !editContent.trim();
+  const hasChanges =
+    editTitle !== item.title ||
+    editContent !== item.content ||
+    editEnabled !== item.enabled;
+
+  const canSave = hasChanges && !titleEmpty && !contentEmpty;
+  const canEnable = !contentEmpty && !titleEmpty;
+
+  const emptyReason = titleEmpty
+    ? "Guidance title can't be empty"
+    : contentEmpty
+    ? "Guidance can't be empty"
+    : null;
+
+  const saveDisabledReason = emptyReason ?? (!hasChanges ? "No changes to save" : null);
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave({ ...item, title: editTitle, content: editContent, enabled: editEnabled });
+  };
+
+  const handleEnable = () => {
+    if (!canEnable) return;
+    onSave({ ...item, title: editTitle, content: editContent, enabled: !editEnabled });
+  };
+
+  const requestClose = () => {
+    if (hasChanges) {
+      setConfirmDiscardOpen(true);
+    } else {
+      onClose();
+    }
+  };
+
+  return (
+    <>
+    <SlidePanel
+      open={open}
+      onClose={requestClose}
+      title={item.title}
+      customHeader={<></>}
+      panelClassName={cn(
+        "!max-w-[1400px]",
+        previewVisible ? "!w-[calc(100vw-280px)]" : "!w-[860px]"
+      )}
+    >
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left — editor column (has its own header) */}
+        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+          {/* Editor header — Untitled / Enable / Save / X */}
+          <div className="flex items-center justify-between px-6 py-4 shrink-0">
+            <div className="flex items-center min-w-0">
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Untitled"
+                size={Math.max((editTitle || "Untitled").length, 8)}
+                className="text-[17px] font-semibold bg-transparent outline-none border-b border-dotted border-muted-foreground/50"
+              />
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={handleEnable}
+                      aria-disabled={!canEnable}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full h-8 px-3.5 text-[13px] font-medium transition-colors",
+                        !canEnable
+                          ? "bg-secondary text-secondary-foreground/60 cursor-not-allowed"
+                          : editEnabled
+                          ? "bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                      )}
+                    />
+                  }
+                >
+                  <Play className="h-3 w-3 fill-current" />
+                  {editEnabled ? "Disable" : "Enable"}
+                </TooltipTrigger>
+                {!canEnable && emptyReason && (
+                  <TooltipContent>{emptyReason}</TooltipContent>
+                )}
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      aria-disabled={!canSave}
+                      className={cn(
+                        "inline-flex items-center rounded-full h-8 px-3.5 text-[13px] font-medium transition-colors",
+                        canSave
+                          ? "bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer"
+                          : "bg-secondary text-secondary-foreground/60 cursor-not-allowed"
+                      )}
+                    />
+                  }
+                >
+                  Save
+                </TooltipTrigger>
+                {!canSave && saveDisabledReason && (
+                  <TooltipContent>{saveDisabledReason}</TooltipContent>
+                )}
+              </Tooltip>
+
+              <button
+                onClick={requestClose}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col">
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              placeholder="Write here..."
+              autoFocus
+              rows={1}
+              className="w-full text-[14px] leading-relaxed bg-transparent resize-none outline-none [field-sizing:content] placeholder:text-muted-foreground/40"
+            />
+
+            {/* Suggestion pills — directly below textarea when empty */}
+            {contentEmpty && (
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                {COMMUNICATION_STYLE_TEMPLATES.slice(0, 3).map((tpl) => (
+                  <Tooltip key={tpl.title}>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditTitle(tpl.title);
+                            setEditContent(tpl.description);
+                          }}
+                          className="inline-flex items-center rounded-full border border-border px-3 py-1.5 text-[13px] text-foreground hover:bg-muted/30 transition-colors cursor-pointer"
+                        />
+                      }
+                    >
+                      {tpl.title}
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="start" className="max-w-[320px] px-4 py-3">
+                      <div>
+                        <p className="text-[13px] font-semibold mb-1">{tpl.title}</p>
+                        <p className="text-[12.5px] leading-[1.5] text-muted-foreground whitespace-pre-line">
+                          {tpl.description}
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        onClick={() => setTemplatesOpen(true)}
+                        className="inline-flex items-center justify-center rounded-full border border-border w-8 h-8 text-muted-foreground hover:bg-muted/30 transition-colors cursor-pointer"
+                      />
+                    }
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>All templates</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+
+            <div className="flex-1" />
+
+            {/* Action buttons — shown when typing */}
+            {!contentEmpty && (
+              <div className="mt-3 flex items-center gap-2">
+                <button className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[13px] text-foreground hover:bg-muted/30 transition-colors cursor-pointer">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Optimize
+                </button>
+                <button className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[13px] text-foreground hover:bg-muted/30 transition-colors cursor-pointer">
+                  <Code className="h-3.5 w-3.5" />
+                  Insert attribute
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Footer stats */}
+          <div className="border-t border-border/40 px-6 py-3 flex items-center gap-5 shrink-0">
+            <span className="text-[13px] text-muted-foreground">
+              Used <span className="font-medium text-foreground">{item.stats.used}</span>
+            </span>
+            <span className="text-[13px] text-muted-foreground">
+              Resolved <span className="font-medium text-foreground">{item.stats.resolved ?? "—"}</span>
+            </span>
+            <span className="text-[13px] text-muted-foreground">
+              Routed <span className="font-medium text-foreground">{item.stats.escalated ?? "—"}</span>
+            </span>
+            <div className="flex-1" />
+            <button
+              onClick={() => {
+                onDelete(item.id);
+                onClose();
+              }}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-muted transition-colors cursor-pointer"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Right — Preview (reused shared component, X closes only preview column) */}
+        {previewVisible && (
+          <GuidancePreviewPanel
+            className="flex w-[400px] shrink-0 flex-col border-l border-border"
+            onClose={() => setPreviewVisible(false)}
+            guidance={
+              editContent.trim()
+                ? [{ title: editTitle || "Guideline", content: editContent }]
+                : []
+            }
+            personality={personality}
+          />
+        )}
+      </div>
+    </SlidePanel>
+    <TemplatesModal
+      open={templatesOpen}
+      onClose={() => setTemplatesOpen(false)}
+      onSelect={(tpl) => {
+        setEditTitle(tpl.title);
+        setEditContent(tpl.description);
+      }}
+    />
+    <ConfirmModal
+      open={confirmDiscardOpen}
+      onClose={() => setConfirmDiscardOpen(false)}
+      onConfirm={() => onClose()}
+      title="Unsaved Changes"
+      description="You haven't finished creating this guidance. If you leave now, your changes will be lost."
+      cancelLabel="Keep editing"
+      confirmLabel="Discard"
+    />
+    </>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function GuidancePage() {
-  const [categories, setCategories] = useState<GuidanceCategory[]>(initialCategories);
-  const [search, setSearch] = useState("");
-  const [previewTab, setPreviewTab] = useState<"customer" | "event">("customer");
+  const allItems = useQuery(api.guidanceItems.list) ?? [];
+  const createItem = useMutation(api.guidanceItems.create);
+  const updateItem = useMutation(api.guidanceItems.update);
+  const removeItem = useMutation(api.guidanceItems.remove);
 
-  const handleUpdateItem = useCallback(
-    (categoryId: string, updatedItem: GuidanceItem) => {
-      setCategories((prev) =>
-        prev.map((cat) =>
-          cat.id === categoryId
-            ? {
-                ...cat,
-                items: cat.items.map((item) =>
-                  item.id === updatedItem.id ? updatedItem : item
-                ),
-              }
-            : cat
-        )
-      );
-    },
-    []
+  const settings = useQuery(api.guidanceSettings.get);
+  const saveSettings = useMutation(api.guidanceSettings.save);
+
+  const [search, setSearch] = useState("");
+  const [selectedItem, setSelectedItem] = useState<{ categoryId: string; item: GuidanceItem } | null>(null);
+
+  const savedTone: ToneOption = settings?.tone ?? "friendly";
+  const savedLength: LengthOption = settings?.length ?? "standard";
+
+  const personality = useMemo(
+    () => ({
+      tone: toneOptions.find((t) => t.value === savedTone)?.label,
+      length: lengthOptions.find((l) => l.value === savedLength)?.label,
+    }),
+    [savedTone, savedLength]
   );
 
-  const handleDeleteItem = useCallback(
-    (categoryId: string, itemId: string) => {
-      setCategories((prev) =>
-        prev.map((cat) =>
-          cat.id === categoryId
-            ? { ...cat, items: cat.items.filter((item) => item.id !== itemId) }
-            : cat
-        )
-      );
+  const handleBasicsSave = useCallback(
+    async (tone: ToneOption, length: LengthOption) => {
+      await saveSettings({ tone, length });
+    },
+    [saveSettings]
+  );
+
+  // Build categories with their items from Convex
+  const categories = useMemo<GuidanceCategory[]>(() => {
+    return CATEGORIES.map((cat) => ({
+      ...cat,
+      items: allItems
+        .filter((item) => item.categoryId === cat.id)
+        .map((item) => ({
+          id: item._id,
+          _id: item._id,
+          title: item.title,
+          content: item.content,
+          enabled: item.enabled,
+          audience: item.audience,
+          channels: item.channels,
+          categoryId: item.categoryId,
+          stats: {
+            used: item.stats.used,
+            resolved: item.stats.resolved ?? null,
+            escalated: item.stats.escalated ?? null,
+          },
+        })),
+    }));
+  }, [allItems]);
+
+  const previewGuidance = useMemo(
+    () =>
+      allItems
+        .filter((i) => i.content.trim().length > 0)
+        .map((i) => ({ title: i.title, content: i.content })),
+    [allItems]
+  );
+
+  const handleSelectItem = useCallback(
+    (categoryId: string, item: GuidanceItem) => {
+      setSelectedItem({ categoryId, item });
     },
     []
   );
@@ -680,7 +881,7 @@ export default function GuidancePage() {
   const handleAddItem = useCallback((categoryId: string) => {
     const newItem: GuidanceItem = {
       id: `new-${Date.now()}`,
-      title: "New guidance",
+      title: "",
       content: "",
       enabled: false,
       isNew: true,
@@ -688,11 +889,7 @@ export default function GuidancePage() {
       channels: "All channels",
       stats: { used: 0, resolved: null, escalated: null },
     };
-    setCategories((prev) =>
-      prev.map((cat) =>
-        cat.id === categoryId ? { ...cat, items: [...cat.items, newItem] } : cat
-      )
-    );
+    setSelectedItem({ categoryId, item: newItem });
   }, []);
 
   // Filter categories and items based on search
@@ -724,7 +921,11 @@ export default function GuidancePage() {
         <div className="px-6 py-6">
           {/* Basics */}
           <div className="mb-7">
-            <BasicsCard />
+            <BasicsCard
+              savedTone={savedTone}
+              savedLength={savedLength}
+              onSave={handleBasicsSave}
+            />
           </div>
 
           {/* Search & Filters */}
@@ -750,8 +951,7 @@ export default function GuidancePage() {
               <GuidanceCategorySection
                 key={category.id}
                 category={category}
-                onUpdateItem={handleUpdateItem}
-                onDeleteItem={handleDeleteItem}
+                onSelectItem={handleSelectItem}
                 onAddItem={handleAddItem}
               />
             ))}
@@ -759,92 +959,45 @@ export default function GuidancePage() {
         </div>
       </div>
 
-      {/* Preview panel — same as Content page */}
-      <div className="flex w-[380px] shrink-0 flex-col rounded-xl bg-white">
-        {/* Preview header */}
-        <div className="flex items-center justify-between px-6 py-5">
-          <h2 className="text-[20px] font-semibold tracking-tight">Preview</h2>
-          <div className="flex items-center gap-1">
-            <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-              <Settings className="h-[18px] w-[18px] text-muted-foreground" />
-            </button>
-            <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-              <RotateCcw className="h-[18px] w-[18px] text-muted-foreground" />
-            </button>
-            <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-              <X className="h-[18px] w-[18px] text-muted-foreground" />
-            </button>
-          </div>
-        </div>
+      {/* Preview panel */}
+      <GuidancePreviewPanel guidance={previewGuidance} personality={personality} />
 
-        {/* Testing as */}
-        <div className="flex items-center gap-3 border-t border-border/40 px-6 py-3.5">
-          <span className="text-[13px] text-muted-foreground">Testing as</span>
-          <Button variant="outline" size="sm" className="h-8 text-[13px] gap-1.5 rounded-lg font-medium">
-            <Bot className="h-3.5 w-3.5" />
-            Preview user
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          </Button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-t border-border/40 px-2">
-          <button
-            onClick={() => setPreviewTab("customer")}
-            className={`px-4 py-3.5 text-[14px] font-medium transition-colors cursor-pointer ${
-              previewTab === "customer"
-                ? "border-b-[2.5px] border-[#e87537] text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Customer view
-          </button>
-          <button
-            onClick={() => setPreviewTab("event")}
-            className={`px-4 py-3.5 text-[14px] font-medium transition-colors cursor-pointer ${
-              previewTab === "event"
-                ? "border-b-[2.5px] border-[#e87537] text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Event log
-          </button>
-        </div>
-
-        {/* Preview content */}
-        <div className="flex flex-1 flex-col items-center justify-center px-10 text-center border-t border-border/40">
-          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-muted/60">
-            <Bot className="h-7 w-7 text-muted-foreground/70" />
-          </div>
-          <p className="text-[14px] leading-[1.6] text-muted-foreground">
-            Ask your agent a question your customers might ask, to preview its response.
-          </p>
-        </div>
-
-        {/* Input */}
-        <div className="border-t border-border/40 px-5 py-5">
-          <div className="rounded-xl border border-border/60 px-4 py-3.5">
-            <Input
-              placeholder="Ask a question..."
-              className="border-0 p-0 h-auto text-[14px] shadow-none focus-visible:ring-0"
-            />
-            <div className="mt-3 flex items-center gap-1">
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-                <Paperclip className="h-[18px] w-[18px] text-muted-foreground/60" />
-              </button>
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-                <Smile className="h-[18px] w-[18px] text-muted-foreground/60" />
-              </button>
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-                <Image className="h-[18px] w-[18px] text-muted-foreground/60" />
-              </button>
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer">
-                <Mic className="h-[18px] w-[18px] text-muted-foreground/60" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* SlidePanel overlay for guidance detail */}
+      <GuidanceDetailPanel
+        open={!!selectedItem}
+        item={selectedItem?.item ?? null}
+        personality={personality}
+        onClose={() => setSelectedItem(null)}
+        onSave={async (updated) => {
+          if (!selectedItem) return;
+          if (updated._id) {
+            await updateItem({
+              id: updated._id,
+              title: updated.title,
+              content: updated.content,
+              enabled: updated.enabled,
+              audience: updated.audience,
+              channels: updated.channels,
+            });
+          } else {
+            await createItem({
+              categoryId: selectedItem.categoryId,
+              title: updated.title,
+              content: updated.content,
+              audience: updated.audience,
+              channels: updated.channels,
+            });
+          }
+          setSelectedItem(null);
+        }}
+        onDelete={async (id) => {
+          const item = selectedItem?.item;
+          if (item?._id) {
+            await removeItem({ id: item._id });
+          }
+          setSelectedItem(null);
+        }}
+      />
     </>
   );
 }

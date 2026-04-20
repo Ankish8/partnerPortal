@@ -1,19 +1,14 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { mutation } from "./_generated/server";
+import {
+  generateStorageUploadUrl,
+  listAllDesc,
+  removeWithStorage,
+} from "./lib";
 
-export const list = query({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db.query("callRecordings").order("desc").collect();
-  },
-});
+export const list = listAllDesc("callRecordings");
 
-export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.storage.generateUploadUrl();
-  },
-});
+export const generateUploadUrl = generateStorageUploadUrl();
 
 export const create = mutation({
   args: {
@@ -34,13 +29,4 @@ export const create = mutation({
   },
 });
 
-export const remove = mutation({
-  args: { id: v.id("callRecordings") },
-  handler: async (ctx, args) => {
-    const rec = await ctx.db.get(args.id);
-    if (rec?.storageId) {
-      await ctx.storage.delete(rec.storageId);
-    }
-    await ctx.db.delete(args.id);
-  },
-});
+export const remove = removeWithStorage("callRecordings");
