@@ -1,7 +1,13 @@
 import { NextRequest } from "next/server";
-import { fetchAction } from "convex/nextjs";
+import { fetchAction, fetchMutation } from "convex/nextjs";
 import { parse as parsePartial, Allow } from "partial-json";
 import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import {
+  evaluateEscalationRules,
+  detectLanguageHeuristic,
+  type EscalationRuleInput,
+} from "@/lib/escalation-evaluator";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -42,11 +48,19 @@ interface AttributeValueSpec {
   description: string;
 }
 
+interface AttributeConditionSpec {
+  id: string;
+  ifAttributeId: string;
+  ifValueId: string;
+  useValueIds: string[];
+}
+
 interface AttributeSpec {
   id: string;
   title: string;
   description: string;
   values: AttributeValueSpec[];
+  conditions?: AttributeConditionSpec[];
 }
 
 interface AttributeDetection {
@@ -54,6 +68,11 @@ interface AttributeDetection {
   attributeTitle: string;
   valueId: string | null;
   valueName: string | null;
+}
+
+interface EscalationGuidanceSpec {
+  title: string;
+  content: string;
 }
 
 type StreamEvent =
@@ -67,6 +86,11 @@ type StreamEvent =
       knowledgePagesAvailable: number;
       latencyMs: number;
       attributeDetections: AttributeDetection[];
+      conversationId: string | null;
+      escalate: boolean;
+      escalationReason: string | null;
+      escalationTriggeredBy: "rule" | "guidance" | null;
+      escalationRuleTitles: string[];
     }
   | { type: "error"; message: string };
 
@@ -107,17 +131,46 @@ function buildKnowledgeSection(sources: Source[]): string {
 
 function buildAttributeSection(attributes: AttributeSpec[]): string {
   if (attributes.length === 0) return "";
+  const attrById = new Map(attributes.map((a) => [a.id, a]));
   const blocks = attributes.map((a) => {
     const valueLines = a.values
       .map((v) => `    - id: "${v.id}" — ${v.name}: ${v.description}`)
       .join("\n");
-    return [
+
+    const lines = [
       `- Attribute id: "${a.id}"`,
       `  Title: ${a.title}`,
       `  Purpose: ${a.description}`,
       `  Allowed values:`,
       valueLines,
-    ].join("\n");
+    ];
+
+    const conditions = a.conditions ?? [];
+    if (conditions.length > 0) {
+      const conditionLines: string[] = [];
+      for (const c of conditions) {
+        const controlling = attrById.get(c.ifAttributeId);
+        if (!controlling) continue;
+        const ifValue = controlling.values.find((v) => v.id === c.ifValueId);
+        if (!ifValue) continue;
+        const allowedValues = a.values.filter((v) =>
+          c.useValueIds.includes(v.id),
+        );
+        if (allowedValues.length === 0) continue;
+        const allowedList = allowedValues
+          .map((v) => `"${v.id}" (${v.name})`)
+          .join(", ");
+        conditionLines.push(
+          `    - Only detect this attribute when attribute "${controlling.title}" is detected as "${ifValue.name}". When that condition holds, restrict the chosen value id to: [${allowedList}]. Otherwise select null.`,
+        );
+      }
+      if (conditionLines.length > 0) {
+        lines.push("  Conditional rules (apply BEFORE picking a value):");
+        lines.push(...conditionLines);
+      }
+    }
+
+    return lines.join("\n");
   });
   return [
     "=== ATTRIBUTE DETECTION ===",
@@ -125,9 +178,30 @@ function buildAttributeSection(attributes: AttributeSpec[]): string {
     "- Base the decision on the latest user message in context of the conversation so far.",
     "- Use ONLY the value ids listed for each attribute — never invent ids.",
     "- Prefer null over guessing when the message is ambiguous for that attribute.",
+    "- When an attribute has Conditional rules, evaluate them using the SAME attributeDetections you are producing in this response — keep the detections self-consistent. If the controlling condition does not hold, select null for the dependent attribute.",
     "",
     blocks.join("\n\n"),
     "=== END ATTRIBUTE DETECTION ===",
+  ].join("\n");
+}
+
+function buildEscalationSection(
+  escalationGuidance: EscalationGuidanceSpec[],
+): string {
+  if (escalationGuidance.length === 0) return "";
+  const blocks = escalationGuidance
+    .map((g) => `- ${g.title || "Escalation rule"}: ${g.content.trim()}`)
+    .join("\n");
+  return [
+    "=== ESCALATION GUIDANCE ===",
+    "Decide whether this conversation should be handed off to a human agent. Use ONLY the escalation guidance below — do not invent reasons.",
+    "- Set `escalate` to true ONLY when the latest customer message (in context of the conversation) clearly matches one of the guidelines below.",
+    "- When escalating, put a SHORT plain-text reason (max 1 sentence, quoting the trigger) into `escalationReason`.",
+    "- When not escalating, set `escalate` to false and `escalationReason` to an empty string.",
+    "- If you escalate, your main `response` should acknowledge the customer briefly and let them know a human will take over — do not attempt to answer the original question.",
+    "",
+    blocks,
+    "=== END ESCALATION GUIDANCE ===",
   ].join("\n");
 }
 
@@ -135,7 +209,8 @@ function buildSystemPrompt(
   activeGuidance: GuidanceRule[],
   personality: Personality | undefined,
   sources: Source[],
-  attributes: AttributeSpec[]
+  attributes: AttributeSpec[],
+  escalationGuidance: EscalationGuidanceSpec[],
 ): string {
   const sections: string[] = [];
   const grounded = sources.length > 0;
@@ -205,6 +280,9 @@ function buildSystemPrompt(
   const attrSection = buildAttributeSection(attributes);
   if (attrSection) sections.push(attrSection);
 
+  const escalationSection = buildEscalationSection(escalationGuidance);
+  if (escalationSection) sections.push(escalationSection);
+
   sections.push(
     [
       "Follow-up handling:",
@@ -228,7 +306,11 @@ function buildSystemPrompt(
   return sections.join("\n\n");
 }
 
-function buildResponseSchema(activeGuidanceCount: number, attributeCount: number) {
+function buildResponseSchema(
+  activeGuidanceCount: number,
+  attributeCount: number,
+  escalationGuidanceCount: number,
+) {
   const properties: Record<string, unknown> = {
     response: {
       type: "string",
@@ -284,6 +366,22 @@ function buildResponseSchema(activeGuidanceCount: number, attributeCount: number
   };
   required.push("attributeDetections");
 
+  properties.escalate = {
+    type: "boolean",
+    description:
+      escalationGuidanceCount > 0
+        ? "True if the conversation matches one of the ESCALATION GUIDANCE rules and should be handed off to a human."
+        : "No escalation guidance is configured; return false.",
+  };
+  properties.escalationReason = {
+    type: "string",
+    description:
+      escalationGuidanceCount > 0
+        ? "Short plain-text reason describing which guideline triggered escalation. Empty string when escalate is false."
+        : "No escalation guidance is configured; return an empty string.",
+  };
+  required.push("escalate", "escalationReason");
+
   return {
     name: "agent_reply",
     strict: true,
@@ -324,6 +422,9 @@ export async function POST(request: NextRequest) {
     guidance?: GuidanceRule[];
     personality?: Personality;
     attributes?: AttributeSpec[];
+    escalationRules?: EscalationRuleInput[];
+    escalationGuidance?: EscalationGuidanceSpec[];
+    conversationId?: string | null;
   };
 
   const activeGuidance = (body.guidance ?? []).filter(
@@ -333,6 +434,23 @@ export async function POST(request: NextRequest) {
   const activeAttributes = (body.attributes ?? []).filter(
     (a) => a.title?.trim().length > 0 && a.values.length >= 2
   );
+
+  const activeEscalationGuidance = (body.escalationGuidance ?? []).filter(
+    (g) => g.content?.trim().length > 0,
+  );
+  const activeEscalationRules = (body.escalationRules ?? []).filter(
+    (r) => r.enabled && r.conditionGroups.some((g) => g.conditions.length > 0),
+  );
+
+  let conversationId: Id<"conversations"> | null =
+    (body.conversationId as Id<"conversations"> | null | undefined) ?? null;
+  if (!conversationId && activeAttributes.length > 0) {
+    try {
+      conversationId = await fetchMutation(api.conversations.start, {});
+    } catch (err) {
+      console.error("Failed to start conversation:", err);
+    }
+  }
 
   const lastUserMessage =
     [...body.messages].reverse().find((m) => m.role === "user")?.content ?? "";
@@ -352,11 +470,13 @@ export async function POST(request: NextRequest) {
     activeGuidance,
     body.personality,
     sources,
-    activeAttributes
+    activeAttributes,
+    activeEscalationGuidance,
   );
   const responseSchema = buildResponseSchema(
     activeGuidance.length,
-    activeAttributes.length
+    activeAttributes.length,
+    activeEscalationGuidance.length,
   );
   const abortController = new AbortController();
   request.signal.addEventListener("abort", () => abortController.abort());
@@ -477,6 +597,8 @@ export async function POST(request: NextRequest) {
       let citationIds: number[] = [];
       let guidanceApplied: string[] = [];
       let rawDetections: Array<{ attributeId: string; valueId: string | null }> = [];
+      let llmEscalate = false;
+      let llmEscalationReason = "";
       try {
         const parsed = JSON.parse(rawJson) as {
           response?: unknown;
@@ -484,6 +606,8 @@ export async function POST(request: NextRequest) {
           citationIds?: unknown;
           guidanceApplied?: unknown;
           attributeDetections?: unknown;
+          escalate?: unknown;
+          escalationReason?: unknown;
         };
         if (typeof parsed.response === "string") finalResponse = parsed.response;
         if (typeof parsed.followUp === "string") followUp = parsed.followUp.trim();
@@ -505,6 +629,10 @@ export async function POST(request: NextRequest) {
               typeof rec.valueId === "string" ? rec.valueId : null;
             return [{ attributeId: rec.attributeId, valueId }];
           });
+        }
+        if (typeof parsed.escalate === "boolean") llmEscalate = parsed.escalate;
+        if (typeof parsed.escalationReason === "string") {
+          llmEscalationReason = parsed.escalationReason.trim();
         }
       } catch {
         // partial parse fallback
@@ -564,6 +692,35 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // Evaluate escalation — rules win over LLM guidance
+      let escalate = false;
+      let escalationReason: string | null = null;
+      let escalationTriggeredBy: "rule" | "guidance" | null = null;
+      let escalationRuleTitles: string[] = [];
+      if (activeEscalationRules.length > 0) {
+        const turnCount = body.messages.filter((m) => m.role === "user").length;
+        const { matched } = evaluateEscalationRules(activeEscalationRules, {
+          attributeDetections: attributeDetections.map((d) => ({
+            attributeId: d.attributeId,
+            valueId: d.valueId,
+          })),
+          messageContent: lastUserMessage,
+          detectedLanguage: detectLanguageHeuristic(lastUserMessage),
+          turnCount,
+        });
+        if (matched.length > 0) {
+          escalate = true;
+          escalationTriggeredBy = "rule";
+          escalationRuleTitles = matched.map((r) => r.title || "Untitled rule");
+          escalationReason = `Matched rule${matched.length === 1 ? "" : "s"}: ${escalationRuleTitles.join(", ")}`;
+        }
+      }
+      if (!escalate && llmEscalate && activeEscalationGuidance.length > 0) {
+        escalate = true;
+        escalationTriggeredBy = "guidance";
+        escalationReason = llmEscalationReason || null;
+      }
+
       emit({
         type: "done",
         followUp,
@@ -573,8 +730,30 @@ export async function POST(request: NextRequest) {
         knowledgePagesAvailable: sources.length,
         latencyMs: Date.now() - start,
         attributeDetections,
+        conversationId: conversationId ?? null,
+        escalate,
+        escalationReason,
+        escalationTriggeredBy,
+        escalationRuleTitles,
       });
       controller.close();
+
+      if (conversationId && attributeDetections.length > 0) {
+        const convId = conversationId;
+        await Promise.allSettled(
+          attributeDetections
+            .filter((d) => d.valueId !== null)
+            .map((d) =>
+              fetchMutation(api.conversations.recordDetection, {
+                conversationId: convId,
+                attributeId: d.attributeId as Id<"attributes">,
+                valueId: d.valueId as string,
+              }).catch((err) => {
+                console.error("recordDetection failed:", err);
+              }),
+            ),
+        );
+      }
     },
     cancel() {
       abortController.abort();

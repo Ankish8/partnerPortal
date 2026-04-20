@@ -113,6 +113,95 @@ export default defineSchema({
     ),
     stats: v.object({
       detected: v.number(),
+      conversations: v.optional(v.number()),
+      resolved: v.optional(v.number()),
+      escalated: v.optional(v.number()),
+    }),
+  }).index("by_enabled", ["enabled"]),
+
+  // Conversations — preview-panel sessions used for attribute counters
+  conversations: defineTable({
+    endedAt: v.optional(v.number()),
+    outcome: v.optional(
+      v.union(v.literal("resolved"), v.literal("escalated")),
+    ),
+    detections: v.array(
+      v.object({
+        attributeId: v.id("attributes"),
+        valueId: v.string(),
+      }),
+    ),
+  }).index("by_outcome", ["outcome"]),
+
+  // Escalation rules — deterministic conditions that hand off the conversation to a human
+  escalationRules: defineTable({
+    title: v.string(),
+    enabled: v.boolean(),
+    // OR across condition groups; AND within each group
+    conditionGroups: v.array(
+      v.object({
+        id: v.string(),
+        conditions: v.array(
+          v.union(
+            v.object({
+              kind: v.literal("attribute"),
+              id: v.string(),
+              attributeId: v.id("attributes"),
+              operator: v.union(
+                v.literal("is_any_of"),
+                v.literal("is_none_of"),
+              ),
+              valueIds: v.array(v.string()),
+            }),
+            v.object({
+              kind: v.literal("message_content"),
+              id: v.string(),
+              operator: v.union(
+                v.literal("contains"),
+                v.literal("not_contains"),
+              ),
+              text: v.string(),
+            }),
+            v.object({
+              kind: v.literal("detected_language"),
+              id: v.string(),
+              operator: v.union(
+                v.literal("is_any_of"),
+                v.literal("is_none_of"),
+              ),
+              languages: v.array(v.string()),
+            }),
+            v.object({
+              kind: v.literal("turn_count"),
+              id: v.string(),
+              operator: v.union(
+                v.literal("gt"),
+                v.literal("gte"),
+                v.literal("lt"),
+                v.literal("lte"),
+                v.literal("equals"),
+              ),
+              value: v.number(),
+            }),
+          ),
+        ),
+      }),
+    ),
+    stats: v.object({
+      matched: v.number(),
+    }),
+  }).index("by_enabled", ["enabled"]),
+
+  // Escalation guidance — natural-language instructions that guide the LLM to escalate
+  escalationGuidance: defineTable({
+    title: v.string(),
+    content: v.string(),
+    enabled: v.boolean(),
+    audience: v.string(),
+    channels: v.string(),
+    stats: v.object({
+      used: v.number(),
+      escalated: v.optional(v.number()),
     }),
   }).index("by_enabled", ["enabled"]),
 

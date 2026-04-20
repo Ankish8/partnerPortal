@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { uploadFileToConvex } from "@/lib/convex-upload";
 import { SlidePanel } from "@/components/ui/slide-panel";
 import { Button } from "@/components/ui/button";
@@ -82,7 +83,7 @@ export function CallRecordingsPanel({
           name: file.name,
           size: file.size,
           duration,
-          storageId: storageId as any,
+          storageId: storageId as Id<"_storage">,
         });
 
         setRecordings((prev) =>

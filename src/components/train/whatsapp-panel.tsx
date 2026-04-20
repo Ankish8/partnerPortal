@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { uploadFileToConvex } from "@/lib/convex-upload";
 import { SlidePanel } from "@/components/ui/slide-panel";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,7 @@ export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
           name: chatName,
           messageCount: msgCount,
           dateRange,
-          storageId: storageId as any,
+          storageId: storageId as Id<"_storage">,
         });
 
         setChats((prev) =>
@@ -169,7 +170,7 @@ export function WhatsAppPanel({ open, onClose }: WhatsAppPanelProps) {
                 <ol className="mt-3 space-y-2 text-[12px] text-muted-foreground pl-4 list-decimal">
                   <li>Open the WhatsApp chat you want to export</li>
                   <li>Tap the three dots menu (⋮) → More → Export chat</li>
-                  <li>Choose "Without media" for text-only export</li>
+                  <li>Choose &ldquo;Without media&rdquo; for text-only export</li>
                   <li>Save or share the exported .txt file</li>
                   <li>Upload the file here</li>
                 </ol>

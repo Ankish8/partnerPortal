@@ -30,6 +30,7 @@ export function SlidePanel({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount panel then trigger slide-in animation next frame
       setMounted(true);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {

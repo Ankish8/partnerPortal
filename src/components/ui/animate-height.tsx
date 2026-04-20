@@ -18,6 +18,7 @@ export function AnimateHeight({
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- initial mount height sync before animation
       setHeight(expanded ? undefined : 0);
       return;
     }

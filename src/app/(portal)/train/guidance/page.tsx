@@ -144,6 +144,7 @@ function BasicsCard({
   const toast = useToast();
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing server-saved values into local draft state
     setTone(savedTone);
     setLength(savedLength);
   }, [savedTone, savedLength]);
@@ -542,6 +543,7 @@ function GuidanceDetailPanel({
 
   useEffect(() => {
     if (item) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- load selected item into editor draft state
       setEditTitle(item.title);
       setEditContent(item.content);
       setEditEnabled(item.enabled);

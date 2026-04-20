@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Workflow, Bot, Globe, Clock, Shield, Save } from "lucide-react";
+import { Workflow, Bot, Globe, Clock, Save } from "lucide-react";
 import { ContentPanel } from "@/components/layout/content-panel";
 
 export default function SettingsPage() {
@@ -53,26 +53,6 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div><p className="text-sm">Auto-detect language</p><p className="text-xs text-muted-foreground">Respond in the customer&apos;s language when possible</p></div>
                 <Switch defaultChecked />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2 mb-4"><Shield className="h-4 w-4 text-primary" /><h2 className="text-sm font-semibold">Escalation Rules</h2></div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm">Auto-escalate on sensitive content</p><p className="text-xs text-muted-foreground">Hand off to human when sensitive topics are detected</p></div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm">Escalate after failed attempts</p><p className="text-xs text-muted-foreground">Hand off if agent can&apos;t resolve after 3 attempts</p></div>
-                <Switch defaultChecked />
-              </div>
-              <div>
-                <label className="text-xs font-medium mb-1 block">Escalation Message</label>
-                <Textarea defaultValue="I'm connecting you with a human agent who can better assist you. Please hold on." />
               </div>
             </div>
           </CardContent>

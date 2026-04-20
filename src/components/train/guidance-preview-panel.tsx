@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import { useMutation } from "convex/react";
 import {
   RotateCcw,
   X,
@@ -19,6 +20,9 @@ import {
   AlertCircle,
   BookOpen,
   ExternalLink,
+  ChevronDown,
+  CheckCircle2,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -26,6 +30,19 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
+import {
+  detectLanguage,
+  type EscalationRuleInput,
+} from "@/lib/escalation-evaluator";
 
 export interface GuidanceRule {
   title: string;
@@ -38,11 +55,19 @@ export interface AttributeValueSpec {
   description: string;
 }
 
+export interface AttributeConditionSpec {
+  id: string;
+  ifAttributeId: string;
+  ifValueId: string;
+  useValueIds: string[];
+}
+
 export interface AttributeSpec {
   id: string;
   title: string;
   description: string;
   values: AttributeValueSpec[];
+  conditions?: AttributeConditionSpec[];
 }
 
 interface AttributeDetection {
@@ -57,9 +82,17 @@ type EventType =
   | "language"
   | "personality"
   | "guidance_rule"
+  | "escalation"
   | "message"
   | "response"
   | "error";
+
+export type EscalationRuleSpec = EscalationRuleInput;
+
+export interface EscalationGuidanceSpec {
+  title: string;
+  content: string;
+}
 
 export interface Citation {
   id: number;
@@ -86,40 +119,14 @@ interface EventEntry {
   type?: EventType;
 }
 
-function detectLanguage(text: string): { language: string; confident: boolean } {
-  const trimmed = text.trim();
-  if (!trimmed) return { language: "English", confident: false };
-
-  if (/[\u4e00-\u9fff]/.test(trimmed)) return { language: "Chinese", confident: true };
-  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(trimmed)) return { language: "Japanese", confident: true };
-  if (/[\uac00-\ud7af]/.test(trimmed)) return { language: "Korean", confident: true };
-  if (/[\u0600-\u06ff]/.test(trimmed)) return { language: "Arabic", confident: true };
-  if (/[\u0400-\u04ff]/.test(trimmed)) return { language: "Russian", confident: true };
-  if (/[\u0900-\u097f]/.test(trimmed)) return { language: "Hindi", confident: true };
-
-  const lower = trimmed.toLowerCase();
-  const latinPatterns: Record<string, RegExp> = {
-    Spanish: /\b(el|la|los|las|de|un|una|y|que|es|con|por|para|pero|cómo|dónde|más)\b/g,
-    French: /\b(le|la|les|de|du|et|que|est|dans|pour|avec|comment|où|plus|très|mais)\b/g,
-    German: /\b(der|die|das|ein|und|ist|zu|mit|für|ich|nicht|wie|wo)\b/g,
-    Portuguese: /\b(o|a|os|as|um|uma|do|da|que|é|em|com|por|para|como|onde|mais)\b/g,
-  };
-  let best = { language: "English", score: 0 };
-  for (const [language, re] of Object.entries(latinPatterns)) {
-    const score = (lower.match(re) || []).length;
-    if (score > best.score) best = { language, score };
-  }
-  const confident = trimmed.length >= 10;
-  if (best.score >= 2) return { language: best.language, confident };
-  return { language: "English", confident };
-}
-
 interface GuidancePreviewPanelProps {
   className?: string;
   onClose?: () => void;
   guidance?: GuidanceRule[];
   personality?: { tone?: string; length?: string };
   attributes?: AttributeSpec[];
+  escalationRules?: EscalationRuleSpec[];
+  escalationGuidance?: EscalationGuidanceSpec[];
 }
 
 export function GuidancePreviewPanel({
@@ -128,6 +135,8 @@ export function GuidancePreviewPanel({
   guidance = [],
   personality,
   attributes = [],
+  escalationRules = [],
+  escalationGuidance = [],
 }: GuidancePreviewPanelProps) {
   const [previewTab, setPreviewTab] = useState<"customer" | "event">("customer");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -135,8 +144,10 @@ export function GuidancePreviewPanel({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showEvents, setShowEvents] = useState(false);
+  const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const endConversation = useMutation(api.conversations.end);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -157,13 +168,29 @@ export function GuidancePreviewPanel({
     ]);
   };
 
-  const handleReset = () => {
+  const clearLocal = () => {
     abortRef.current?.abort();
     abortRef.current = null;
     setMessages([]);
     setEvents([]);
     setInput("");
     setIsLoading(false);
+    setConversationId(null);
+  };
+
+  const handleEndConversation = async (outcome: "resolved" | "escalated") => {
+    const id = conversationId;
+    clearLocal();
+    if (!id) return;
+    try {
+      await endConversation({ conversationId: id, outcome });
+    } catch (err) {
+      console.error("Failed to end conversation:", err);
+    }
+  };
+
+  const handleReset = () => {
+    clearLocal();
   };
 
   const handleSend = async () => {
@@ -244,6 +271,9 @@ export function GuidancePreviewPanel({
           guidance,
           personality,
           attributes,
+          escalationRules,
+          escalationGuidance,
+          conversationId,
         }),
         signal: controller.signal,
       });
@@ -301,6 +331,9 @@ export function GuidancePreviewPanel({
 
       if (doneMeta) {
         const meta = doneMeta;
+        if (meta.conversationId) {
+          setConversationId(meta.conversationId as Id<"conversations">);
+        }
         ensureAssistantMessage();
         setMessages((prev) => {
           const updated = prev.map((m) =>
@@ -343,6 +376,15 @@ export function GuidancePreviewPanel({
             type: "attribute",
           }));
           setEvents((prev) => [...prev, ...attrEvents]);
+        }
+        if (meta.escalate) {
+          const byRule = meta.escalationTriggeredBy === "rule";
+          const ruleTitles = meta.escalationRuleTitles ?? [];
+          const label = byRule
+            ? `Escalation triggered by rule${ruleTitles.length === 1 ? "" : "s"}: ${ruleTitles.join(", ")}`
+            : `Escalation triggered by guidance`;
+          const detail = meta.escalationReason ?? undefined;
+          appendEvent(label, "escalation", detail);
         }
         const srcCount = meta.citations.length;
         const kbCount = meta.knowledgePagesAvailable;
@@ -421,13 +463,40 @@ export function GuidancePreviewPanel({
               )}
             </button>
           )}
-          <button
-            onClick={handleReset}
-            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer"
-            aria-label="Reset conversation"
-          >
-            <RotateCcw className="h-[18px] w-[18px] text-muted-foreground" />
-          </button>
+          {conversationId && messages.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="flex h-8 items-center gap-1 rounded-lg px-2 hover:bg-muted transition-colors cursor-pointer text-[13px] text-muted-foreground"
+                aria-label="End conversation"
+              >
+                <RotateCcw className="h-[16px] w-[16px]" />
+                <ChevronDown className="h-[14px] w-[14px]" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={6}>
+                <DropdownMenuItem onClick={() => handleEndConversation("resolved")}>
+                  <CheckCircle2 className="text-emerald-600" />
+                  End as Resolved
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleEndConversation("escalated")}>
+                  <UserCog className="text-amber-600" />
+                  End as Escalated
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleReset}>
+                  <RotateCcw />
+                  Discard without saving
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <button
+              onClick={handleReset}
+              className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer"
+              aria-label="Reset conversation"
+            >
+              <RotateCcw className="h-[18px] w-[18px] text-muted-foreground" />
+            </button>
+          )}
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer"
@@ -556,6 +625,11 @@ type StreamEvent =
       knowledgePagesAvailable: number;
       latencyMs: number;
       attributeDetections?: AttributeDetection[];
+      conversationId?: string | null;
+      escalate?: boolean;
+      escalationReason?: string | null;
+      escalationTriggeredBy?: "rule" | "guidance" | null;
+      escalationRuleTitles?: string[];
     }
   | { type: "error"; message: string };
 
@@ -760,6 +834,7 @@ const INLINE_EVENT_TYPES: EventType[] = [
   "language",
   "personality",
   "guidance_rule",
+  "escalation",
   "error",
 ];
 
@@ -804,12 +879,18 @@ function InlineEventRow({ event }: { event: EventEntry }) {
       ? Sparkles
       : event.type === "guidance_rule"
       ? BookOpen
+      : event.type === "escalation"
+      ? UserCog
       : event.type === "error"
       ? AlertCircle
       : Bot;
 
   const tone =
-    event.type === "error" ? "text-destructive" : "text-muted-foreground";
+    event.type === "error"
+      ? "text-destructive"
+      : event.type === "escalation"
+      ? "text-amber-600"
+      : "text-muted-foreground";
 
   return (
     <div className={cn("flex items-start gap-2.5 px-1 py-1 text-[12.5px]", tone)}>

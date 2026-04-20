@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Button } from "@/components/ui/button";
 import { ToastProvider, useToast, type ToastVariant } from "@/components/ui/toast";
@@ -148,12 +149,12 @@ export const WithAction: Story = {
 
 function StackingDemo() {
   const toast = useToast();
-  let count = 0;
+  const countRef = useRef(0);
 
   const fireOne = () => {
-    count += 1;
+    countRef.current += 1;
     toast.add({
-      title: `Toast #${count}`,
+      title: `Toast #${countRef.current}`,
       description: "Hover the stack to expand.",
       data: { variant: "default" },
       timeout: 0,

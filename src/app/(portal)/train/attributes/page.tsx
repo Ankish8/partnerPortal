@@ -27,6 +27,7 @@ import {
   LayoutTemplate,
   ChevronDown,
   ChevronRight,
+  Pencil,
 } from "lucide-react";
 
 function nanoid(): string {
@@ -205,6 +206,12 @@ export default function AttributesPage() {
             name: v.name,
             description: v.description,
           })),
+          conditions: a.conditions.map((c) => ({
+            id: c.id,
+            ifAttributeId: c.ifAttributeId as string,
+            ifValueId: c.ifValueId,
+            useValueIds: c.useValueIds,
+          })),
         })),
     [attributes],
   );
@@ -316,9 +323,9 @@ export default function AttributesPage() {
                   }))}
                   enabled={a.enabled}
                   conditions={a.conditions.length}
-                  conversations={0}
-                  resolved={0}
-                  escalated={0}
+                  conversations={a.stats?.conversations ?? 0}
+                  resolved={a.stats?.resolved ?? 0}
+                  escalated={a.stats?.escalated ?? 0}
                   isLast={i === attributes.length - 1}
                   isExpanded={expanded.has(a._id)}
                   onToggleExpand={() => toggleExpanded(a._id)}
@@ -390,7 +397,7 @@ function AttributeRow({
     >
       <div
         onClick={onOpen}
-        className="grid grid-cols-[minmax(180px,1.5fr)_1fr_1fr_1fr_1.2fr_1fr_1fr] items-center gap-4 px-5 py-3.5 hover:bg-muted/30 transition-colors cursor-pointer"
+        className="group grid grid-cols-[minmax(180px,1.5fr)_1fr_1fr_1fr_1.2fr_1fr_1fr] items-center gap-4 px-5 py-3.5 hover:bg-muted/30 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2 min-w-0">
           <button
@@ -404,10 +411,22 @@ function AttributeRow({
           >
             <ChevIcon className="h-3.5 w-3.5" />
           </button>
-          <div className="min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <p className="text-[14px] font-medium truncate">
               {title || "Untitled"}
             </p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen();
+              }}
+              className="hidden group-hover:inline-flex items-center gap-1 rounded-full bg-muted hover:bg-muted/80 px-2 py-0.5 text-[12px] font-medium text-foreground/80 shrink-0 cursor-pointer"
+              aria-label="Edit attribute"
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </button>
           </div>
         </div>
         <span className="text-[13px] text-muted-foreground">

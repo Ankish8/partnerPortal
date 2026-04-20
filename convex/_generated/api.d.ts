@@ -10,7 +10,10 @@
 
 import type * as attributes from "../attributes.js";
 import type * as callRecordings from "../callRecordings.js";
+import type * as conversations from "../conversations.js";
 import type * as documents from "../documents.js";
+import type * as escalationGuidance from "../escalationGuidance.js";
+import type * as escalationRules from "../escalationRules.js";
 import type * as guidanceItems from "../guidanceItems.js";
 import type * as guidanceSettings from "../guidanceSettings.js";
 import type * as lib from "../lib.js";
@@ -28,7 +31,10 @@ import type {
 declare const fullApi: ApiFromModules<{
   attributes: typeof attributes;
   callRecordings: typeof callRecordings;
+  conversations: typeof conversations;
   documents: typeof documents;
+  escalationGuidance: typeof escalationGuidance;
+  escalationRules: typeof escalationRules;
   guidanceItems: typeof guidanceItems;
   guidanceSettings: typeof guidanceSettings;
   lib: typeof lib;

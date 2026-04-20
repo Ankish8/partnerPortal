@@ -207,6 +207,7 @@ export function WebsiteSyncPanel({
     if (!open) {
       if (pollRef.current) clearInterval(pollRef.current);
       knownUrlsRef.current.clear();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset panel state when parent closes it
       setCrawl({ status: "idle", jobId: null, pages: [], error: null });
       setActiveTab("Connect");
       setSelectedPages(new Set());
