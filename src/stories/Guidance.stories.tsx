@@ -38,7 +38,6 @@ type Story = StoryObj;
 // ─── Category Icon ────────────────────────────────────────────────────────
 
 export const CategoryIcon: Story = {
-  name: "Category Icon",
   render: () => (
     <div className="flex gap-4 items-center">
       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-700">
@@ -60,7 +59,6 @@ export const CategoryIcon: Story = {
 // ─── Category Header ──────────────────────────────────────────────────────
 
 export const CategoryHeader: Story = {
-  name: "Category Header",
   render: () => (
     <div className="flex items-start gap-3 w-[600px]">
       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-700 shrink-0">

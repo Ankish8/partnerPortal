@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
@@ -11,6 +10,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { AnimateHeight } from "@/components/ui/animate-height";
 import { SlidePanel } from "@/components/ui/slide-panel";
+import { SlidePanelEditorHeader } from "@/components/ui/slide-panel-editor-header";
 import { GuidancePreviewPanel } from "@/components/train/guidance-preview-panel";
 import { TemplatesModal, COMMUNICATION_STYLE_TEMPLATES } from "@/components/train/templates-modal";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -24,13 +24,9 @@ import {
   HelpCircle,
   Shield,
   BookOpen,
-  X,
   Plus,
   Trash2,
-  Play,
   Check,
-  Users,
-  Building2,
   AlignLeft,
   AlignCenter,
   AlignJustify,
@@ -267,134 +263,6 @@ function BasicsCard({
   );
 }
 
-// ─── Guidance Item — Expanded Editor ─────────────────────────────────────────
-
-function GuidanceItemExpanded({
-  item,
-  onSave,
-  onDelete,
-  onClose,
-}: {
-  item: GuidanceItem;
-  onSave: (updated: GuidanceItem) => void;
-  onDelete: (id: string) => void;
-  onClose: () => void;
-}) {
-  const [editContent, setEditContent] = useState(item.content);
-  const [editEnabled, setEditEnabled] = useState(item.enabled);
-
-  const hasChanges = editContent !== item.content || editEnabled !== item.enabled;
-
-  const handleSave = () => {
-    onSave({ ...item, content: editContent, enabled: editEnabled });
-    onClose();
-  };
-
-  return (
-    <div className="rounded-xl border border-border/60 overflow-hidden">
-      {/* Header */}
-      <div className="px-5 pt-4 pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[15px] font-bold">{item.title}</span>
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-[12px] font-normal",
-                editEnabled
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : ""
-              )}
-            >
-              {editEnabled ? "Enabled" : "Not enabled"}
-            </Badge>
-            {item.isNew && (
-              <Badge variant="outline" className="text-[12px] font-normal">
-                New
-              </Badge>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md hover:bg-muted transition-colors shrink-0 cursor-pointer"
-          >
-            <X className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </div>
-        <p className="text-[13px] text-muted-foreground mt-1">
-          Used: <span className="font-semibold text-foreground">{item.stats.used}</span> &bull; Resolved:{" "}
-          <span className="font-semibold text-foreground">{item.stats.resolved ?? "—"}</span> &bull; Escalated:{" "}
-          <span className="font-semibold text-foreground">{item.stats.escalated ?? "—"}</span>
-        </p>
-      </div>
-
-      {/* Content */}
-      <div className="px-5 pb-4 border-t border-border/40 pt-4">
-        <Textarea
-          value={editContent}
-          onChange={(e) => setEditContent(e.target.value)}
-          className="min-h-[160px] text-[14px] resize-none border-0 p-0 shadow-none focus-visible:ring-0"
-        />
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-t border-border/60">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="rounded-full text-[13px] gap-1.5 pointer-events-none">
-            <Users className="h-3.5 w-3.5" />
-            {item.audience}
-          </Button>
-          <Button variant="outline" size="sm" className="rounded-full text-[13px] gap-1.5 pointer-events-none">
-            <Building2 className="h-3.5 w-3.5" />
-            {item.channels}
-          </Button>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => onDelete(item.id)}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-muted transition-colors cursor-pointer"
-          >
-            <Trash2 className="h-[18px] w-[18px]" />
-          </button>
-          <Button
-            size="sm"
-            onClick={() => setEditEnabled(!editEnabled)}
-            className="rounded-full bg-emerald-700 text-white hover:bg-emerald-800 text-[13px] h-8 px-3.5"
-          >
-            <Play className="h-3 w-3 mr-1 fill-current" />
-            {editEnabled ? "Disable" : "Enable"}
-          </Button>
-          <button
-            onClick={onClose}
-            disabled={!hasChanges}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[14px] transition-colors",
-              hasChanges
-                ? "bg-muted/70 text-foreground hover:bg-muted cursor-pointer"
-                : "text-muted-foreground/50 cursor-default"
-            )}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!hasChanges}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[14px] transition-colors",
-              hasChanges
-                ? "bg-emerald-700 text-white hover:bg-emerald-800 cursor-pointer"
-                : "bg-muted/70 text-muted-foreground/50 cursor-default"
-            )}
-          >
-            <Check className="h-3.5 w-3.5" />
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Guidance Item — Table Row ──────────────────────────────────────────────
 
 function GuidanceItemTableRow({
@@ -604,76 +472,18 @@ function GuidanceDetailPanel({
       <div className="flex flex-1 overflow-hidden">
         {/* Left — editor column (has its own header) */}
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-          {/* Editor header — Untitled / Enable / Save / X */}
-          <div className="flex items-center justify-between px-6 py-4 shrink-0">
-            <div className="flex items-center min-w-0">
-              <input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="Untitled"
-                size={Math.max((editTitle || "Untitled").length, 8)}
-                className="text-[17px] font-semibold bg-transparent outline-none border-b border-dotted border-muted-foreground/50"
-              />
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      onClick={handleEnable}
-                      aria-disabled={!canEnable}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full h-8 px-3.5 text-[13px] font-medium transition-colors",
-                        !canEnable
-                          ? "bg-secondary text-secondary-foreground/60 cursor-not-allowed"
-                          : editEnabled
-                          ? "bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer"
-                          : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                      )}
-                    />
-                  }
-                >
-                  <Play className="h-3 w-3 fill-current" />
-                  {editEnabled ? "Disable" : "Enable"}
-                </TooltipTrigger>
-                {!canEnable && emptyReason && (
-                  <TooltipContent>{emptyReason}</TooltipContent>
-                )}
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      onClick={handleSave}
-                      aria-disabled={!canSave}
-                      className={cn(
-                        "inline-flex items-center rounded-full h-8 px-3.5 text-[13px] font-medium transition-colors",
-                        canSave
-                          ? "bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer"
-                          : "bg-secondary text-secondary-foreground/60 cursor-not-allowed"
-                      )}
-                    />
-                  }
-                >
-                  Save
-                </TooltipTrigger>
-                {!canSave && saveDisabledReason && (
-                  <TooltipContent>{saveDisabledReason}</TooltipContent>
-                )}
-              </Tooltip>
-
-              <button
-                onClick={requestClose}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+          <SlidePanelEditorHeader
+            title={editTitle}
+            onTitleChange={setEditTitle}
+            enabled={editEnabled}
+            canEnable={canEnable}
+            canSave={canSave}
+            onEnable={handleEnable}
+            onSave={handleSave}
+            onClose={requestClose}
+            emptyReason={emptyReason}
+            saveDisabledReason={saveDisabledReason}
+          />
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col">
@@ -812,7 +622,8 @@ function GuidanceDetailPanel({
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function GuidancePage() {
-  const allItems = useQuery(api.guidanceItems.list) ?? [];
+  const allItemsRaw = useQuery(api.guidanceItems.list);
+  const allItems = useMemo(() => allItemsRaw ?? [], [allItemsRaw]);
   const createItem = useMutation(api.guidanceItems.create);
   const updateItem = useMutation(api.guidanceItems.update);
   const removeItem = useMutation(api.guidanceItems.remove);
@@ -992,7 +803,7 @@ export default function GuidancePage() {
           }
           setSelectedItem(null);
         }}
-        onDelete={async (id) => {
+        onDelete={async () => {
           const item = selectedItem?.item;
           if (item?._id) {
             await removeItem({ id: item._id });

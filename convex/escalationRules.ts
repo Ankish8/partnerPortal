@@ -1,12 +1,16 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { listAllDesc } from "./lib";
 
 const attributeConditionValidator = v.object({
   kind: v.literal("attribute"),
   id: v.string(),
   attributeId: v.id("attributes"),
-  operator: v.union(v.literal("is_any_of"), v.literal("is_none_of")),
+  operator: v.union(
+    v.literal("is_any_of"),
+    v.literal("is_none_of"),
+    v.literal("has_any_value"),
+  ),
   valueIds: v.array(v.string()),
 });
 
@@ -101,7 +105,7 @@ export const remove = mutation({
   },
 });
 
-export const recordMatch = internalMutation({
+export const recordMatch = mutation({
   args: { ids: v.array(v.id("escalationRules")) },
   handler: async (ctx, args) => {
     for (const id of args.ids) {

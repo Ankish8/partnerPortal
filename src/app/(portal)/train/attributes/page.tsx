@@ -41,7 +41,6 @@ function emptyDraft(): AttributeDraft {
     category: "custom",
     enabled: false,
     audience: "Everyone",
-    redetectOnClose: false,
     values: [],
     conditions: [],
     stats: { detected: 0 },
@@ -55,7 +54,6 @@ function draftFromTemplate(tpl: AttributeTemplate): AttributeDraft {
     category: tpl.category,
     enabled: false,
     audience: "Everyone",
-    redetectOnClose: false,
     values: tpl.values.map((v) => ({
       id: nanoid(),
       name: v.name,
@@ -130,7 +128,6 @@ export default function AttributesPage() {
         category: a.category,
         enabled: a.enabled,
         audience: a.audience,
-        redetectOnClose: a.redetectOnClose,
         values: a.values.map((v) => ({ ...v })),
         conditions: a.conditions.map((c) => ({
           id: c.id,
@@ -163,7 +160,6 @@ export default function AttributesPage() {
           category: updated.category,
           enabled: updated.enabled,
           audience: updated.audience,
-          redetectOnClose: updated.redetectOnClose,
           values: updated.values,
           conditions: sanitizedConditions,
         });

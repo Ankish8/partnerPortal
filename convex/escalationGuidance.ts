@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { listAllDesc } from "./lib";
 
 export const list = listAllDesc("escalationGuidance");
@@ -86,7 +86,7 @@ export const ensureSeeded = mutation({
   },
 });
 
-export const recordUse = internalMutation({
+export const recordUse = mutation({
   args: {
     ids: v.array(v.id("escalationGuidance")),
     escalated: v.boolean(),

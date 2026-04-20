@@ -90,6 +90,7 @@ type EventType =
 export type EscalationRuleSpec = EscalationRuleInput;
 
 export interface EscalationGuidanceSpec {
+  _id?: Id<"escalationGuidance">;
   title: string;
   content: string;
 }

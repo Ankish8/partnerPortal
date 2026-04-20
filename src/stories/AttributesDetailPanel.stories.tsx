@@ -31,7 +31,6 @@ const draft: AttributeDraft = {
   category: "routing",
   enabled: true,
   audience: "Everyone",
-  redetectOnClose: false,
   values: [
     { id: "v1", name: "English", description: "Default reply language" },
     { id: "v2", name: "Hindi", description: "Use for customers in India" },

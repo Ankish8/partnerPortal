@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FlaskConical, Send, RotateCcw, Settings2, CheckCircle2 } from "lucide-react";
 import { ContentPanel } from "@/components/layout/content-panel";

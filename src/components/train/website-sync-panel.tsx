@@ -362,17 +362,6 @@ export function WebsiteSyncPanel({
     });
   };
 
-  const toggleAll = () => {
-    const selectableUrls = crawl.pages
-      .filter((p) => p.status !== "pending" && p.status !== "queued")
-      .map((p) => p.url);
-    if (selectedPages.size === selectableUrls.length) {
-      setSelectedPages(new Set());
-    } else {
-      setSelectedPages(new Set(selectableUrls));
-    }
-  };
-
   const getDisplayUrl = (fullUrl: string) => {
     try {
       const parsed = new URL(fullUrl);
@@ -392,13 +381,6 @@ export function WebsiteSyncPanel({
     } catch {
       return { prefix: fullUrl, bold: "" };
     }
-  };
-
-  const addUrlField = (
-    list: string[],
-    setList: React.Dispatch<React.SetStateAction<string[]>>
-  ) => {
-    setList([...list, ""]);
   };
 
   const updateUrlField = (

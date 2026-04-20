@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Play, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SlidePanel } from "@/components/ui/slide-panel";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip";
+import { SlidePanelEditorHeader } from "@/components/ui/slide-panel-editor-header";
 import { GuidancePreviewPanel } from "@/components/train/guidance-preview-panel";
 import type { Id } from "../../../convex/_generated/dataModel";
 import {
@@ -113,78 +114,21 @@ export function EscalationGuidancePanel({
         <div className="flex flex-1 overflow-hidden">
           {/* Left — editor column */}
           <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-            <div className="flex items-center justify-between px-6 py-4 shrink-0">
-              <div className="flex items-center min-w-0">
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="Untitled"
-                  size={Math.max((editTitle || "Untitled").length, 8)}
-                  className="text-[17px] font-semibold bg-transparent outline-none border-b border-dotted border-muted-foreground/50"
-                />
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        onClick={handleEnable}
-                        aria-disabled={!canEnable}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full h-8 px-3.5 text-[13px] font-medium transition-colors",
-                          !canEnable
-                            ? "bg-secondary text-secondary-foreground/60 cursor-not-allowed"
-                            : editEnabled
-                            ? "bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer"
-                            : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer",
-                        )}
-                      />
-                    }
-                  >
-                    <Play className="h-3 w-3 fill-current" />
-                    {editEnabled ? "Disable" : "Enable"}
-                  </TooltipTrigger>
-                  {!canEnable && emptyReason && (
-                    <TooltipContent>{emptyReason}</TooltipContent>
-                  )}
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        onClick={handleSave}
-                        aria-disabled={!canSave}
-                        className={cn(
-                          "inline-flex items-center rounded-full h-8 px-3.5 text-[13px] font-medium transition-colors",
-                          canSave
-                            ? "bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer"
-                            : "bg-secondary text-secondary-foreground/60 cursor-not-allowed",
-                        )}
-                      />
-                    }
-                  >
-                    Save
-                  </TooltipTrigger>
-                  {!canSave && saveDisabledReason && (
-                    <TooltipContent>{saveDisabledReason}</TooltipContent>
-                  )}
-                </Tooltip>
-
-                <button
-                  onClick={requestClose}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors cursor-pointer"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+            <SlidePanelEditorHeader
+              title={editTitle}
+              onTitleChange={setEditTitle}
+              enabled={editEnabled}
+              canEnable={canEnable}
+              canSave={canSave}
+              onEnable={handleEnable}
+              onSave={handleSave}
+              onClose={requestClose}
+              emptyReason={emptyReason}
+              saveDisabledReason={saveDisabledReason}
+            />
 
             <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col">
-              <p className="text-[12.5px] text-muted-foreground mb-2">
+              <p className="text-[14px] text-muted-foreground mb-2">
                 Describe when the agent should hand off to a human. The agent will
                 read this as natural language guidance.
               </p>
@@ -259,7 +203,13 @@ export function EscalationGuidancePanel({
               onClose={() => setPreviewVisible(false)}
               escalationGuidance={
                 editContent.trim()
-                  ? [{ title: editTitle || "Escalation rule", content: editContent }]
+                  ? [
+                      {
+                        ...(item?._id ? { _id: item._id } : {}),
+                        title: editTitle || "Escalation rule",
+                        content: editContent,
+                      },
+                    ]
                   : []
               }
               personality={personality}

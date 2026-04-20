@@ -3,7 +3,7 @@ export type EscalationCondition =
       kind: "attribute";
       id: string;
       attributeId: string;
-      operator: "is_any_of" | "is_none_of";
+      operator: "is_any_of" | "is_none_of" | "has_any_value";
       valueIds: string[];
     }
   | {
@@ -49,6 +49,9 @@ function evaluateCondition(
         (d) => d.attributeId === c.attributeId,
       );
       const detected = detection?.valueId ?? null;
+      if (c.operator === "has_any_value") {
+        return detected !== null;
+      }
       if (c.operator === "is_any_of") {
         return detected !== null && c.valueIds.includes(detected);
       }

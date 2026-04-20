@@ -95,7 +95,6 @@ export default defineSchema({
     ),
     enabled: v.boolean(),
     audience: v.string(),
-    redetectOnClose: v.boolean(),
     values: v.array(
       v.object({
         id: v.string(),
@@ -150,6 +149,7 @@ export default defineSchema({
               operator: v.union(
                 v.literal("is_any_of"),
                 v.literal("is_none_of"),
+                v.literal("has_any_value"),
               ),
               valueIds: v.array(v.string()),
             }),

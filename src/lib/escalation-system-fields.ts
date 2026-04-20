@@ -67,8 +67,9 @@ export function operatorLabel(
   operator: string,
 ): string {
   if (key === "attribute") {
-    if (operator === "is_any_of") return "is one of";
-    if (operator === "is_none_of") return "is not one of";
+    if (operator === "is_any_of") return "is";
+    if (operator === "is_none_of") return "is not";
+    if (operator === "has_any_value") return "has any value";
     return operator;
   }
   const field = ESCALATION_SYSTEM_FIELDS.find((f) => f.key === key);

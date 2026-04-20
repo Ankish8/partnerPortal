@@ -50,7 +50,6 @@ export const create = mutation({
       category: args.category,
       enabled: false,
       audience: args.audience,
-      redetectOnClose: false,
       values: args.values,
       conditions: args.conditions,
       stats: { detected: 0 },
@@ -66,7 +65,6 @@ export const update = mutation({
     category: v.optional(categoryValidator),
     enabled: v.optional(v.boolean()),
     audience: v.optional(v.string()),
-    redetectOnClose: v.optional(v.boolean()),
     values: v.optional(v.array(valueValidator)),
     conditions: v.optional(v.array(conditionValidator)),
   },
@@ -78,7 +76,6 @@ export const update = mutation({
     if (fields.category !== undefined) updates.category = fields.category;
     if (fields.enabled !== undefined) updates.enabled = fields.enabled;
     if (fields.audience !== undefined) updates.audience = fields.audience;
-    if (fields.redetectOnClose !== undefined) updates.redetectOnClose = fields.redetectOnClose;
     if (fields.values !== undefined) updates.values = fields.values;
     if (fields.conditions !== undefined) updates.conditions = fields.conditions;
     await ctx.db.patch(id, updates);

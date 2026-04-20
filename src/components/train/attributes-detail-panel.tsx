@@ -32,7 +32,6 @@ export interface AttributeDraft {
   category: AttributeCategory;
   enabled: boolean;
   audience: string;
-  redetectOnClose: boolean;
   values: AttributeValueDraft[];
   conditions: AttributeConditionDraft[];
   stats: { detected: number };

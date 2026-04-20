@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Settings, ChevronDown, Mail } from "lucide-react";
+import { Plus, Settings, Mail } from "lucide-react";
 
 const meta: Meta<typeof Button> = {
   title: "UI/Button",

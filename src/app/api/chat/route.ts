@@ -71,6 +71,7 @@ interface AttributeDetection {
 }
 
 interface EscalationGuidanceSpec {
+  _id?: string;
   title: string;
   content: string;
 }
@@ -697,6 +698,7 @@ export async function POST(request: NextRequest) {
       let escalationReason: string | null = null;
       let escalationTriggeredBy: "rule" | "guidance" | null = null;
       let escalationRuleTitles: string[] = [];
+      let matchedRules: EscalationRuleInput[] = [];
       if (activeEscalationRules.length > 0) {
         const turnCount = body.messages.filter((m) => m.role === "user").length;
         const { matched } = evaluateEscalationRules(activeEscalationRules, {
@@ -708,6 +710,7 @@ export async function POST(request: NextRequest) {
           detectedLanguage: detectLanguageHeuristic(lastUserMessage),
           turnCount,
         });
+        matchedRules = matched;
         if (matched.length > 0) {
           escalate = true;
           escalationTriggeredBy = "rule";
@@ -738,21 +741,51 @@ export async function POST(request: NextRequest) {
       });
       controller.close();
 
+      const statsTasks: Promise<unknown>[] = [];
+
       if (conversationId && attributeDetections.length > 0) {
         const convId = conversationId;
-        await Promise.allSettled(
-          attributeDetections
-            .filter((d) => d.valueId !== null)
-            .map((d) =>
-              fetchMutation(api.conversations.recordDetection, {
-                conversationId: convId,
-                attributeId: d.attributeId as Id<"attributes">,
-                valueId: d.valueId as string,
-              }).catch((err) => {
-                console.error("recordDetection failed:", err);
-              }),
-            ),
+        for (const d of attributeDetections) {
+          if (d.valueId === null) continue;
+          statsTasks.push(
+            fetchMutation(api.conversations.recordDetection, {
+              conversationId: convId,
+              attributeId: d.attributeId as Id<"attributes">,
+              valueId: d.valueId as string,
+            }).catch((err) => {
+              console.error("recordDetection failed:", err);
+            }),
+          );
+        }
+      }
+
+      if (matchedRules.length > 0) {
+        statsTasks.push(
+          fetchMutation(api.escalationRules.recordMatch, {
+            ids: matchedRules.map((r) => r._id as Id<"escalationRules">),
+          }).catch((err) => {
+            console.error("recordMatch failed:", err);
+          }),
         );
+      }
+
+      const guidanceIds = activeEscalationGuidance
+        .map((g) => g._id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+        .map((id) => id as Id<"escalationGuidance">);
+      if (guidanceIds.length > 0) {
+        statsTasks.push(
+          fetchMutation(api.escalationGuidance.recordUse, {
+            ids: guidanceIds,
+            escalated: escalationTriggeredBy === "guidance",
+          }).catch((err) => {
+            console.error("recordUse failed:", err);
+          }),
+        );
+      }
+
+      if (statsTasks.length > 0) {
+        await Promise.allSettled(statsTasks);
       }
     },
     cancel() {

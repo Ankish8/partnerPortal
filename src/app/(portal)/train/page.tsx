@@ -36,6 +36,7 @@ import {
   History,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -74,10 +75,14 @@ export default function TrainPage() {
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   // Convex queries
-  const websiteSources = useQuery(api.websiteSources.list) ?? [];
-  const documents = useQuery(api.documents.list) ?? [];
-  const recordings = useQuery(api.callRecordings.list) ?? [];
-  const chats = useQuery(api.whatsappChats.list) ?? [];
+  const websiteSourcesRaw = useQuery(api.websiteSources.list);
+  const documentsRaw = useQuery(api.documents.list);
+  const recordingsRaw = useQuery(api.callRecordings.list);
+  const chatsRaw = useQuery(api.whatsappChats.list);
+  const websiteSources = useMemo(() => websiteSourcesRaw ?? [], [websiteSourcesRaw]);
+  const documents = useMemo(() => documentsRaw ?? [], [documentsRaw]);
+  const recordings = useMemo(() => recordingsRaw ?? [], [recordingsRaw]);
+  const chats = useMemo(() => chatsRaw ?? [], [chatsRaw]);
 
   // Convex mutations
   const removeWebsiteSource = useMutation(api.websiteSources.remove);
@@ -236,9 +241,12 @@ export default function TrainPage() {
                 >
                   <div className="flex items-center gap-3">
                     {source.faviconUrl ? (
-                      <img
+                      <Image
                         src={source.faviconUrl}
                         alt=""
+                        width={18}
+                        height={18}
+                        unoptimized
                         className="h-[18px] w-[18px] shrink-0 rounded-sm"
                       />
                     ) : (

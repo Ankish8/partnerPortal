@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Rocket, CheckCircle2, Copy, Phone, Key, AlertCircle } from "lucide-react";
+import { Rocket, Copy, Phone, Key, AlertCircle } from "lucide-react";
 import { ContentPanel } from "@/components/layout/content-panel";
 
 const deploymentSteps = [
