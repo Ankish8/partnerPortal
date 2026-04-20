@@ -15,7 +15,15 @@ const meta: Meta<typeof Badge> = {
   argTypes: {
     variant: {
       control: "select",
-      options: ["default", "secondary", "destructive", "outline", "ghost", "link"],
+      options: [
+        "default",
+        "secondary",
+        "destructive",
+        "outline",
+        "success",
+        "ghost",
+        "link",
+      ],
       description: "Visual style of the badge",
       table: { defaultValue: { summary: "default" } },
     },
@@ -43,6 +51,10 @@ export const Outline: Story = {
   args: { variant: "outline", children: "Outline" },
 };
 
+export const Success: Story = {
+  args: { variant: "success", children: "Enabled" },
+};
+
 export const Ghost: Story = {
   args: { variant: "ghost", children: "Ghost" },
 };
@@ -54,6 +66,7 @@ export const AllVariants: Story = {
       <Badge variant="secondary">Secondary</Badge>
       <Badge variant="destructive">Destructive</Badge>
       <Badge variant="outline">Outline</Badge>
+      <Badge variant="success">Success</Badge>
       <Badge variant="ghost">Ghost</Badge>
       <Badge variant="link">Link</Badge>
     </div>
@@ -63,9 +76,7 @@ export const AllVariants: Story = {
 export const StatusBadges: Story = {
   render: () => (
     <div className="flex flex-wrap gap-3 items-center">
-      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
-        Enabled
-      </Badge>
+      <Badge variant="success">Enabled</Badge>
       <Badge variant="outline">Not enabled</Badge>
       <Badge variant="outline">Everyone on All channels</Badge>
       <Badge variant="outline">New</Badge>

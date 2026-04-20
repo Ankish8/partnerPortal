@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { X, Play, Plus, Trash2, Search, GripVertical } from "lucide-react";
+import { X, Play, Plus, Trash2, Search, GripVertical, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SlidePanel } from "@/components/ui/slide-panel";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -56,7 +55,6 @@ interface Props {
 
 type Tab = "general" | "values" | "conditions";
 
-const AUDIENCE_OPTIONS = ["Everyone", "New users", "Returning users"];
 
 const CATEGORY_OPTIONS: { value: AttributeCategory; label: string }[] = [
   { value: "escalation", label: "Escalation" },
@@ -82,12 +80,16 @@ export function AttributesDetailPanel({
   const [valueSearch, setValueSearch] = useState("");
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const [prevDraft, setPrevDraft] = useState(draft);
+  const [editingValue, setEditingValue] = useState<AttributeValueDraft | null>(null);
+  const [editingIsNew, setEditingIsNew] = useState(false);
 
   if (draft !== prevDraft) {
     setPrevDraft(draft);
     setState(draft);
     setActiveTab("general");
     setValueSearch("");
+    setEditingValue(null);
+    setEditingIsNew(false);
   }
 
   const filteredValues = useMemo(() => {
@@ -137,21 +139,39 @@ export function AttributesDetailPanel({
     }
   };
 
-  const updateValue = (id: string, patch: Partial<AttributeValueDraft>) => {
-    setState((s) =>
-      s ? { ...s, values: s.values.map((v) => (v.id === id ? { ...v, ...patch } : v)) } : s,
-    );
+  const addValue = () => {
+    setEditingValue({ id: nanoid(), name: "", description: "" });
+    setEditingIsNew(true);
   };
 
-  const addValue = () => {
-    setState((s) =>
-      s
-        ? {
-            ...s,
-            values: [...s.values, { id: nanoid(), name: "", description: "" }],
-          }
-        : s,
-    );
+  const openValue = (id: string) => {
+    const v = state?.values.find((x) => x.id === id);
+    if (!v) return;
+    setEditingValue({ ...v });
+    setEditingIsNew(false);
+  };
+
+  const saveEditingValue = () => {
+    if (!editingValue) return;
+    const name = editingValue.name.trim();
+    if (!name) return;
+    setState((s) => {
+      if (!s) return s;
+      const exists = s.values.some((v) => v.id === editingValue.id);
+      return {
+        ...s,
+        values: exists
+          ? s.values.map((v) => (v.id === editingValue.id ? editingValue : v))
+          : [...s.values, editingValue],
+      };
+    });
+    setEditingValue(null);
+    setEditingIsNew(false);
+  };
+
+  const cancelEditingValue = () => {
+    setEditingValue(null);
+    setEditingIsNew(false);
   };
 
   const removeValue = (id: string) => {
@@ -279,15 +299,110 @@ export function AttributesDetailPanel({
     { id: "conditions", label: "Conditions", count: state.conditions.length },
   ];
 
+  const NAME_LIMIT = 400;
+  const DESC_LIMIT = 2500;
+
+  const valueHeader = editingValue ? (
+    <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          onClick={cancelEditingValue}
+          className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted transition-colors cursor-pointer shrink-0"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h2 className="text-[15px] font-medium text-muted-foreground truncate">
+          {state._id ? "Edit attribute" : "New attribute"}
+          <span className="mx-2 text-muted-foreground/50">›</span>
+          <span className="text-foreground font-semibold">
+            {editingIsNew ? "New value" : "Edit value"}
+          </span>
+        </h2>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={saveEditingValue}
+          disabled={!editingValue.name.trim()}
+          className={cn(
+            "inline-flex items-center rounded-full h-8 px-3.5 text-[13px] font-medium transition-colors",
+            editingValue.name.trim()
+              ? "bg-foreground text-background hover:bg-foreground/90 cursor-pointer"
+              : "bg-secondary text-secondary-foreground/60 cursor-not-allowed",
+          )}
+        >
+          Save
+        </button>
+        <button
+          onClick={cancelEditingValue}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors cursor-pointer"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       <SlidePanel
         open={open}
         onClose={requestClose}
         title="Edit attribute"
-        customHeader={header}
+        customHeader={editingValue ? (valueHeader as React.ReactElement) : header}
         panelClassName="!w-[860px]"
       >
+        {editingValue ? (
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-6 py-6 space-y-6">
+              <div>
+                <label className="block text-[14px] font-semibold mb-1.5">Name</label>
+                <p className="text-[13px] text-muted-foreground mb-2">
+                  Choose a short, clear name that tells the agent exactly what this value
+                  represents.
+                </p>
+                <Input
+                  value={editingValue.name}
+                  onChange={(e) =>
+                    setEditingValue({ ...editingValue, name: e.target.value.slice(0, NAME_LIMIT) })
+                  }
+                  placeholder="Enter a name, e.g. Negative"
+                  className="h-10 text-[14px]"
+                />
+                <p className="text-[12.5px] text-muted-foreground mt-1.5">
+                  {NAME_LIMIT - editingValue.name.length} characters remaining
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[14px] font-semibold mb-1.5">Description</label>
+                <p className="text-[13px] text-muted-foreground mb-2">
+                  Describe what this value represents and when the agent should choose it.
+                  Include the conversation topics it applies to, common customer keywords or
+                  questions, and when it should be chosen instead of other values in the
+                  attribute.
+                </p>
+                <Textarea
+                  value={editingValue.description}
+                  onChange={(e) =>
+                    setEditingValue({
+                      ...editingValue,
+                      description: e.target.value.slice(0, DESC_LIMIT),
+                    })
+                  }
+                  placeholder={
+                    "Enter a description, e.g.\n\nThis value covers all conversations where a customer expresses negative sentiment. Common examples include:\n• Negative feedback about a product\n• Frustration with customer service received\n• Negative view of our company compared to competitors\n\nCommon questions:\n• Why was my order late?\n• Why haven't I received a response yet?\n\nKeywords: unhappy, frustrated, refund, angry, upset, poor service, bad experience, broken"
+                  }
+                  className="min-h-[360px] text-[14px] leading-[1.6] resize-y"
+                />
+                <p className="text-[12.5px] text-muted-foreground mt-1.5">
+                  {DESC_LIMIT - editingValue.description.length} characters remaining
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Tabs */}
         <div className="flex border-b border-border/60 px-6 shrink-0">
           {tabs.map((tab) => (
@@ -314,8 +429,8 @@ export function AttributesDetailPanel({
             <div className="px-6 py-6 space-y-6">
               {/* Name */}
               <div>
-                <label className="block text-[13px] font-semibold mb-1.5">Name</label>
-                <p className="text-[12.5px] text-muted-foreground mb-2">
+                <label className="block text-[14px] font-semibold mb-1.5">Name</label>
+                <p className="text-[13px] text-muted-foreground mb-2">
                   Choose a clear, descriptive name that tells the agent the purpose of this
                   attribute. For example, if it&apos;s for detecting customer sentiment, call it
                   &ldquo;Sentiment&rdquo;.
@@ -330,8 +445,8 @@ export function AttributesDetailPanel({
 
               {/* Description */}
               <div>
-                <label className="block text-[13px] font-semibold mb-1.5">Description</label>
-                <p className="text-[12.5px] text-muted-foreground mb-2">
+                <label className="block text-[14px] font-semibold mb-1.5">Description</label>
+                <p className="text-[13px] text-muted-foreground mb-2">
                   Briefly describe this attribute&apos;s purpose and how the agent should use it.
                 </p>
                 <Textarea
@@ -344,8 +459,8 @@ export function AttributesDetailPanel({
 
               {/* Category */}
               <div>
-                <label className="block text-[13px] font-semibold mb-1.5">Category</label>
-                <p className="text-[12.5px] text-muted-foreground mb-2">
+                <label className="block text-[14px] font-semibold mb-1.5">Category</label>
+                <p className="text-[13px] text-muted-foreground mb-2">
                   Used for organization and to color-code badges on the attributes list.
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -364,48 +479,6 @@ export function AttributesDetailPanel({
                       {opt.label}
                     </button>
                   ))}
-                </div>
-              </div>
-
-              {/* Agent settings */}
-              <div className="rounded-xl border border-border/60 p-5 space-y-5">
-                <p className="text-[14px] font-semibold">Agent settings</p>
-
-                {/* Audience */}
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="text-[13px] font-medium">Audience</p>
-                    <p className="text-[12.5px] text-muted-foreground mt-0.5">
-                      Choose which audiences the agent should detect this attribute for.
-                    </p>
-                  </div>
-                  <select
-                    value={state.audience}
-                    onChange={(e) => setState({ ...state, audience: e.target.value })}
-                    className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-[13px] cursor-pointer focus:border-ring focus:ring-2 focus:ring-ring/30 outline-none"
-                  >
-                    {AUDIENCE_OPTIONS.map((a) => (
-                      <option key={a} value={a}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Re-detect on close */}
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="text-[13px] font-medium">Re-detect on close</p>
-                    <p className="text-[12.5px] text-muted-foreground mt-0.5">
-                      Run detection again when a teammate or workflow closes the conversation.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={state.redetectOnClose}
-                    onCheckedChange={(checked) =>
-                      setState({ ...state, redetectOnClose: checked })
-                    }
-                  />
                 </div>
               </div>
 
@@ -428,39 +501,57 @@ export function AttributesDetailPanel({
 
           {activeTab === "values" && (
             <div className="px-6 py-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search values..."
-                    value={valueSearch}
-                    onChange={(e) => setValueSearch(e.target.value)}
-                    className="pl-9 h-9 text-[13px]"
-                  />
-                </div>
-                <button
-                  onClick={addValue}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-foreground text-background hover:bg-foreground/90 px-3.5 py-1.5 text-[13px] font-medium transition-colors cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  New value
-                </button>
-              </div>
-
-              {filteredValues.length === 0 ? (
-                <div className="rounded-lg border border-border/60 border-dashed py-10 px-5 text-center">
-                  <p className="text-[13px] text-muted-foreground">
-                    {valueSearch
-                      ? "No values match your search."
-                      : "No values yet. Add at least two to enable detection."}
+              {state.values.length === 0 ? (
+                <div className="pt-8 pb-10 text-center">
+                  <h3 className="font-heading text-[26px] leading-[1.15] tracking-[-0.01em] text-foreground mb-3">
+                    Add values
+                  </h3>
+                  <p className="text-[14px] text-muted-foreground leading-[1.65] mb-8 max-w-[680px] mx-auto">
+                    Define the values the agent picks from when detecting this attribute.
+                    For sentiment, that&apos;s Positive, Neutral, and Negative. Add at
+                    least two to get started.
                   </p>
+                  <button
+                    onClick={addValue}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-foreground text-background hover:bg-foreground/90 h-9 px-4 text-[13px] font-medium transition-colors cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    New value
+                  </button>
                 </div>
               ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Search values..."
+                        value={valueSearch}
+                        onChange={(e) => setValueSearch(e.target.value)}
+                        className="pl-9 h-9 text-[13px]"
+                      />
+                    </div>
+                    <button
+                      onClick={addValue}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-foreground text-background hover:bg-foreground/90 px-3.5 py-1.5 text-[13px] font-medium transition-colors cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      New value
+                    </button>
+                  </div>
+
+                  {filteredValues.length === 0 ? (
+                    <div className="rounded-lg border border-border/60 border-dashed py-10 px-5 text-center">
+                      <p className="text-[13px] text-muted-foreground">
+                        No values match your search.
+                      </p>
+                    </div>
+                  ) : (
                 <div className="rounded-lg border border-border/60 overflow-hidden">
                   <div className="grid grid-cols-[20px_1fr_2fr_28px] items-center gap-3 px-4 py-2.5 border-b border-border/60 bg-muted/20">
                     <span />
-                    <span className="text-[12px] font-medium text-muted-foreground">Name</span>
-                    <span className="text-[12px] font-medium text-muted-foreground">
+                    <span className="text-[13px] font-medium text-muted-foreground">Name</span>
+                    <span className="text-[13px] font-medium text-muted-foreground">
                       Description
                     </span>
                     <span />
@@ -468,35 +559,37 @@ export function AttributesDetailPanel({
                   {filteredValues.map((v, i) => (
                     <div
                       key={v.id}
+                      onClick={() => openValue(v.id)}
                       className={cn(
-                        "grid grid-cols-[20px_1fr_2fr_28px] items-start gap-3 px-4 py-3",
+                        "grid grid-cols-[20px_1fr_2fr_28px] items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer",
                         i !== filteredValues.length - 1 && "border-b border-border/40",
                       )}
                     >
-                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground/60 mt-2" />
-                      <Input
-                        value={v.name}
-                        onChange={(e) => updateValue(v.id, { name: e.target.value })}
-                        placeholder="Value name"
-                        className="h-8 text-[13px]"
-                      />
-                      <Textarea
-                        value={v.description}
-                        onChange={(e) =>
-                          updateValue(v.id, { description: e.target.value })
-                        }
-                        placeholder="Describe when this value applies"
-                        className="min-h-[32px] text-[13px] py-1.5 resize-none"
-                      />
+                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground/60" />
+                      <p className="text-[14px] font-medium truncate">
+                        {v.name || "Untitled"}
+                      </p>
+                      <p className="text-[13px] text-muted-foreground line-clamp-1">
+                        {v.description || (
+                          <span className="italic text-muted-foreground/60">
+                            No description
+                          </span>
+                        )}
+                      </p>
                       <button
-                        onClick={() => removeValue(v.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeValue(v.id);
+                        }}
                         className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-muted transition-colors cursor-pointer"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
-                </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -523,7 +616,7 @@ export function AttributesDetailPanel({
                         <div className="grid grid-cols-[1fr_1fr_28px] gap-3 items-start">
                           {/* If attribute */}
                           <div>
-                            <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                            <label className="block text-[12px] font-medium text-muted-foreground mb-1">
                               If attribute is detected as...
                             </label>
                             <select
@@ -563,12 +656,12 @@ export function AttributesDetailPanel({
 
                           {/* Then detect using values */}
                           <div>
-                            <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                            <label className="block text-[12px] font-medium text-muted-foreground mb-1">
                               Using values...
                             </label>
                             <div className="rounded-lg border border-input px-2.5 py-1.5 min-h-8 max-h-32 overflow-y-auto">
                               {state.values.length === 0 ? (
-                                <p className="text-[12px] text-muted-foreground">
+                                <p className="text-[13px] text-muted-foreground">
                                   Add values in the Values tab first.
                                 </p>
                               ) : (
@@ -630,13 +723,15 @@ export function AttributesDetailPanel({
                 Add condition
               </button>
               {otherAttributes.length === 0 && (
-                <p className="text-[12.5px] text-muted-foreground mt-2">
+                <p className="text-[13px] text-muted-foreground mt-2">
                   Create at least one other attribute to use as a condition trigger.
                 </p>
               )}
             </div>
           )}
         </div>
+          </>
+        )}
       </SlidePanel>
 
       <ConfirmModal

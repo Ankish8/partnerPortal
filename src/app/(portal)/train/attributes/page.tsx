@@ -5,7 +5,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GuidancePreviewPanel } from "@/components/train/guidance-preview-panel";
@@ -24,10 +23,10 @@ import {
 } from "@/components/train/attribute-templates";
 import {
   Tags,
-  Search,
   Plus,
-  SlidersHorizontal,
   LayoutTemplate,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 function nanoid(): string {
@@ -73,9 +72,18 @@ export default function AttributesPage() {
   const updateAttr = useMutation(api.attributes.update);
   const removeAttr = useMutation(api.attributes.remove);
 
-  const [search, setSearch] = useState("");
   const [draft, setDraft] = useState<AttributeDraft | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const hasAny = attributes.length > 0;
 
@@ -91,16 +99,6 @@ export default function AttributesPage() {
         })),
     [attributes, draftId],
   );
-
-  const filteredAttributes = useMemo(() => {
-    if (!search.trim()) return attributes;
-    const q = search.toLowerCase();
-    return attributes.filter(
-      (a) =>
-        a.title.toLowerCase().includes(q) ||
-        a.description.toLowerCase().includes(q),
-    );
-  }, [attributes, search]);
 
   const templateModalItems: GuidanceTemplate[] = useMemo(
     () =>
@@ -284,64 +282,50 @@ export default function AttributesPage() {
           </div>
         ) : (
           <div className="px-6 py-6">
-            {/* Search & Filters */}
-            <div className="mb-6 flex items-center gap-3">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search attributes by name or description"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 h-10 text-[14px]"
+            <div className="rounded-lg border border-border/60 overflow-hidden">
+              <div className="grid grid-cols-[minmax(180px,1.5fr)_1fr_1fr_1fr_1.2fr_1fr_1fr] items-center gap-4 px-5 py-2.5 border-b border-border/60 bg-muted/20">
+                <span className="text-[13px] font-medium text-muted-foreground">
+                  Name
+                </span>
+                <span className="text-[13px] font-medium text-muted-foreground">
+                  Values
+                </span>
+                <span className="text-[13px] font-medium text-muted-foreground">
+                  Status
+                </span>
+                <span className="text-[13px] font-medium text-muted-foreground">
+                  Conditions
+                </span>
+                <span className="text-[13px] font-medium text-muted-foreground">
+                  Conversations
+                </span>
+                <span className="text-[13px] font-medium text-muted-foreground">
+                  Resolved
+                </span>
+                <span className="text-[13px] font-medium text-muted-foreground">
+                  Escalated
+                </span>
+              </div>
+              {attributes.map((a, i) => (
+                <AttributeRow
+                  key={a._id}
+                  title={a.title}
+                  values={a.values.map((v) => ({
+                    id: v.id,
+                    name: v.name,
+                  }))}
+                  enabled={a.enabled}
+                  conditions={a.conditions.length}
+                  conversations={0}
+                  resolved={0}
+                  escalated={0}
+                  isLast={i === attributes.length - 1}
+                  isExpanded={expanded.has(a._id)}
+                  onToggleExpand={() => toggleExpanded(a._id)}
+                  onOpen={() => handleOpenExisting(a._id)}
                 />
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 gap-1.5 px-4 text-[13px]"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                Filters
-              </Button>
+              ))}
             </div>
-
-            {/* Table */}
-            {filteredAttributes.length === 0 ? (
-              <div className="rounded-lg border border-border/60 border-dashed py-10 px-5 text-center">
-                <p className="text-[13px] text-muted-foreground">
-                  No attributes match your search.
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-border/60 overflow-hidden">
-                <div className="grid grid-cols-[1fr_70px_80px_80px] items-center gap-4 px-5 py-2.5 border-b border-border/60">
-                  <span className="text-[13px] font-medium text-muted-foreground">
-                    Name
-                  </span>
-                  <span className="text-[13px] font-medium text-muted-foreground">
-                    Values
-                  </span>
-                  <span className="text-[13px] font-medium text-muted-foreground">
-                    Status
-                  </span>
-                  <span className="text-[13px] font-medium text-muted-foreground">
-                    Detected
-                  </span>
-                </div>
-                {filteredAttributes.map((a, i) => (
-                  <AttributeRow
-                    key={a._id}
-                    title={a.title}
-                    description={a.description}
-                    valueCount={a.values.length}
-                    enabled={a.enabled}
-                    detected={a.stats.detected}
-                    isLast={i === filteredAttributes.length - 1}
-                    onClick={() => handleOpenExisting(a._id)}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -373,50 +357,114 @@ export default function AttributesPage() {
 
 function AttributeRow({
   title,
-  description,
-  valueCount,
+  values,
   enabled,
-  detected,
+  conditions,
+  conversations,
+  resolved,
+  escalated,
   isLast,
-  onClick,
+  isExpanded,
+  onToggleExpand,
+  onOpen,
 }: {
   title: string;
-  description: string;
-  valueCount: number;
+  values: Array<{ id: string; name: string }>;
   enabled: boolean;
-  detected: number;
+  conditions: number;
+  conversations: number;
+  resolved: number;
+  escalated: number;
   isLast: boolean;
-  onClick: () => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onOpen: () => void;
 }) {
+  const ChevIcon = isExpanded ? ChevronDown : ChevronRight;
   return (
-    <button
-      onClick={onClick}
+    <div
       className={cn(
-        "w-full text-left grid grid-cols-[1fr_70px_80px_80px] items-center gap-4 px-5 py-3.5 hover:bg-muted/30 transition-colors cursor-pointer",
+        "transition-colors",
         !isLast && "border-b border-border/40",
       )}
     >
-      <div className="min-w-0">
-        <p className="text-[14px] font-medium truncate">
-          {title || "Untitled"}
-        </p>
-        {description && (
-          <p className="text-[13px] text-muted-foreground line-clamp-1 mt-0.5">
-            {description}
-          </p>
-        )}
-      </div>
-      <span className="text-[13px] text-muted-foreground">{valueCount}</span>
-      <Badge
-        variant="outline"
-        className={cn(
-          "text-[11px] font-normal w-fit",
-          enabled && "border-emerald-200 bg-emerald-50 text-emerald-700",
-        )}
+      <div
+        onClick={onOpen}
+        className="grid grid-cols-[minmax(180px,1.5fr)_1fr_1fr_1fr_1.2fr_1fr_1fr] items-center gap-4 px-5 py-3.5 hover:bg-muted/30 transition-colors cursor-pointer"
       >
-        {enabled ? "Live" : "Draft"}
-      </Badge>
-      <span className="text-[13px] text-muted-foreground">{detected}</span>
-    </button>
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand();
+            }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-muted text-muted-foreground cursor-pointer"
+            aria-label={isExpanded ? "Collapse" : "Expand"}
+          >
+            <ChevIcon className="h-3.5 w-3.5" />
+          </button>
+          <div className="min-w-0">
+            <p className="text-[14px] font-medium truncate">
+              {title || "Untitled"}
+            </p>
+          </div>
+        </div>
+        <span className="text-[13px] text-muted-foreground">
+          {values.length}
+        </span>
+        <Badge
+          variant={enabled ? "success" : "outline"}
+          className="text-[11px] font-normal w-fit"
+        >
+          {enabled ? "Enabled" : "Draft"}
+        </Badge>
+        <span className="text-[13px] text-muted-foreground">
+          {conditions}
+        </span>
+        <span className="text-[13px] text-muted-foreground">
+          {conversations}
+        </span>
+        <span className="text-[13px] text-muted-foreground">
+          {resolved}
+        </span>
+        <span className="text-[13px] text-muted-foreground">
+          {escalated}
+        </span>
+      </div>
+      {isExpanded && values.length > 0 && (
+        <div className="bg-muted/10 border-t border-border/40">
+          {values.map((v) => (
+            <div
+              key={v.id}
+              className="grid grid-cols-[minmax(180px,1.5fr)_1fr_1fr_1fr_1.2fr_1fr_1fr] items-center gap-4 px-5 py-2.5 border-b border-border/30 last:border-b-0"
+            >
+              <div className="flex items-center gap-2 min-w-0 pl-7">
+                <span className="text-muted-foreground text-[12px]">↳</span>
+                <span className="text-[13px] text-foreground/80 truncate">
+                  {v.name}
+                </span>
+              </div>
+              <span className="text-[13px] text-muted-foreground/70">
+                —
+              </span>
+              <span />
+              <span className="text-[13px] text-muted-foreground/70">
+                —
+              </span>
+              <span className="text-[13px] text-muted-foreground/70">
+                0
+              </span>
+              <span className="text-[13px] text-muted-foreground/70">
+                0
+              </span>
+              <span className="text-[13px] text-muted-foreground/70">
+                0
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
