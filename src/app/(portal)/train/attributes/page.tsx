@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ChevronRight,
   Pencil,
+  Eye,
 } from "lucide-react";
 
 function nanoid(): string {
@@ -74,6 +75,7 @@ export default function AttributesPage() {
   const [draft, setDraft] = useState<AttributeDraft | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [previewVisible, setPreviewVisible] = useState(true);
 
   const toggleExpanded = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -222,8 +224,20 @@ export default function AttributesPage() {
             <Tags className="h-[18px] w-[18px] text-muted-foreground" />
             <h1 className="text-[17px] font-semibold">Attributes</h1>
           </div>
-          {hasAny && (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            {!previewVisible && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full text-[13px]"
+                onClick={() => setPreviewVisible(true)}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Open preview
+              </Button>
+            )}
+            {hasAny && (
+              <>
               <Button
                 variant="outline"
                 size="sm"
@@ -241,8 +255,9 @@ export default function AttributesPage() {
                 <Plus className="h-3.5 w-3.5" />
                 New attribute
               </Button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
         {!hasAny ? (
@@ -334,8 +349,19 @@ export default function AttributesPage() {
         )}
       </div>
 
-      {/* Preview panel */}
-      <GuidancePreviewPanel attributes={enabledAttributesForPreview} />
+      <div
+        className={cn(
+          "flex shrink-0 overflow-hidden rounded-xl transition-all duration-300 ease-out",
+          previewVisible ? "w-[400px]" : "w-0",
+        )}
+      >
+        {previewVisible && (
+          <GuidancePreviewPanel
+            attributes={enabledAttributesForPreview}
+            onClose={() => setPreviewVisible(false)}
+          />
+        )}
+      </div>
 
       {/* Detail panel */}
       <AttributesDetailPanel

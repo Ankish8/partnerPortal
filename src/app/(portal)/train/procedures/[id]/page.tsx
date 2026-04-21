@@ -34,6 +34,7 @@ import {
   Plus,
   Trash2,
   GraduationCap,
+  Eye,
 } from "lucide-react";
 
 type Procedure = Doc<"procedures">;
@@ -62,6 +63,7 @@ export default function ProcedureEditorPage({
   const [bodyJSON, setBodyJSON] = useState<unknown>(null);
   const [baseline, setBaseline] = useState<Procedure | null>(null);
   const [examplesExpanded, setExamplesExpanded] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(true);
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -206,7 +208,7 @@ export default function ProcedureEditorPage({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Untitled"
               size={1}
-              className="h-9 !w-auto min-w-0 max-w-[360px] [field-sizing:content] !rounded-none !border-x-0 !border-t-0 border-b border-transparent bg-transparent px-0 text-[18px] font-semibold shadow-none hover:border-dotted hover:border-muted-foreground/50 focus-visible:ring-0 focus-visible:border-dotted focus-visible:border-muted-foreground/60"
+              className="h-9 !w-auto min-w-0 max-w-[360px] [field-sizing:content] !rounded-none !border-x-0 !border-t-0 border-b border-transparent bg-transparent px-0 text-[24px] font-semibold shadow-none hover:border-dotted hover:border-muted-foreground/50 focus-visible:ring-0 focus-visible:border-dotted focus-visible:border-muted-foreground/60"
             />
             <Badge
               variant={isLive ? "success" : isDraft ? "secondary" : "outline"}
@@ -216,6 +218,16 @@ export default function ProcedureEditorPage({
             </Badge>
           </div>
           <div className="flex items-center gap-2.5">
+            {!previewVisible && (
+              <Button
+                variant="outline"
+                onClick={() => setPreviewVisible(true)}
+                className="h-9 rounded-full px-4 text-[13.5px]"
+              >
+                <Eye className="h-4 w-4" />
+                Open preview
+              </Button>
+            )}
             <Button
               variant="secondary"
               onClick={handleSave}
@@ -372,7 +384,16 @@ export default function ProcedureEditorPage({
         </div>
       </div>
 
-      <GuidancePreviewPanel />
+      <div
+        className={cn(
+          "flex shrink-0 overflow-hidden rounded-xl transition-all duration-300 ease-out",
+          previewVisible ? "w-[400px]" : "w-0",
+        )}
+      >
+        {previewVisible && (
+          <GuidancePreviewPanel onClose={() => setPreviewVisible(false)} />
+        )}
+      </div>
 
       <ConfirmModal
         open={confirmDiscardOpen}

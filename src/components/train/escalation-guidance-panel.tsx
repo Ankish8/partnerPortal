@@ -158,6 +158,8 @@ export function EscalationGuidancePanel({
               onClose={requestClose}
               emptyReason={emptyReason}
               saveDisabledReason={saveDisabledReason}
+              showOpenPreview={!previewVisible}
+              onOpenPreview={() => setPreviewVisible(true)}
             />
 
             <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col">
@@ -250,24 +252,31 @@ export function EscalationGuidancePanel({
             </div>
           </div>
 
-          {previewVisible && (
-            <GuidancePreviewPanel
-              className="flex w-[400px] shrink-0 flex-col border-l border-border"
-              onClose={() => setPreviewVisible(false)}
-              escalationGuidance={
-                editContent.trim()
-                  ? [
-                      {
-                        ...(item?._id ? { _id: item._id } : {}),
-                        title: editTitle || "Escalation rule",
-                        content: editContent,
-                      },
-                    ]
-                  : []
-              }
-              personality={personality}
-            />
-          )}
+          <div
+            className={cn(
+              "flex shrink-0 overflow-hidden border-l border-border transition-all duration-300 ease-out",
+              previewVisible ? "w-[400px]" : "w-0 border-l-0",
+            )}
+          >
+            {previewVisible && (
+              <GuidancePreviewPanel
+                className="flex w-[400px] shrink-0 flex-col"
+                onClose={() => setPreviewVisible(false)}
+                escalationGuidance={
+                  editContent.trim()
+                    ? [
+                        {
+                          ...(item?._id ? { _id: item._id } : {}),
+                          title: editTitle || "Escalation rule",
+                          content: editContent,
+                        },
+                      ]
+                    : []
+                }
+                personality={personality}
+              />
+            )}
+          </div>
         </div>
       </SlidePanel>
       <ConfirmModal

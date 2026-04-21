@@ -39,6 +39,7 @@ import {
   MoreHorizontal,
   Sparkles,
   Code,
+  Eye,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -475,6 +476,8 @@ function GuidanceDetailPanel({
             onClose={requestClose}
             emptyReason={emptyReason}
             saveDisabledReason={saveDisabledReason}
+            showOpenPreview={!previewVisible}
+            onOpenPreview={() => setPreviewVisible(true)}
           />
 
           {/* Scrollable content */}
@@ -575,19 +578,25 @@ function GuidanceDetailPanel({
           </div>
         </div>
 
-        {/* Right — Preview (reused shared component, X closes only preview column) */}
-        {previewVisible && (
-          <GuidancePreviewPanel
-            className="flex w-[400px] shrink-0 flex-col border-l border-border"
-            onClose={() => setPreviewVisible(false)}
-            guidance={
-              editContent.trim()
-                ? [{ title: editTitle || "Guideline", content: editContent }]
-                : []
-            }
-            personality={personality}
-          />
-        )}
+        <div
+          className={cn(
+            "flex shrink-0 overflow-hidden border-l border-border transition-all duration-300 ease-out",
+            previewVisible ? "w-[400px]" : "w-0 border-l-0",
+          )}
+        >
+          {previewVisible && (
+            <GuidancePreviewPanel
+              className="flex w-[400px] shrink-0 flex-col"
+              onClose={() => setPreviewVisible(false)}
+              guidance={
+                editContent.trim()
+                  ? [{ title: editTitle || "Guideline", content: editContent }]
+                  : []
+              }
+              personality={personality}
+            />
+          )}
+        </div>
       </div>
     </SlidePanel>
     <TemplatesModal
@@ -625,6 +634,7 @@ export default function GuidancePage() {
 
   const [search, setSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState<{ categoryId: string; item: GuidanceItem } | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(true);
 
   const savedTone: ToneOption = settings?.tone ?? "friendly";
   const savedLength: LengthOption = settings?.length ?? "standard";
@@ -721,6 +731,17 @@ export default function GuidancePage() {
             <Compass className="h-[18px] w-[18px] text-muted-foreground" />
             <h1 className="text-[17px] font-semibold">Guidance</h1>
           </div>
+          {!previewVisible && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-full px-4 text-[13px]"
+              onClick={() => setPreviewVisible(true)}
+            >
+              <Eye className="h-4 w-4" />
+              Open preview
+            </Button>
+          )}
         </div>
 
         <div className="px-6 py-6">
@@ -764,8 +785,20 @@ export default function GuidancePage() {
         </div>
       </div>
 
-      {/* Preview panel */}
-      <GuidancePreviewPanel guidance={previewGuidance} personality={personality} />
+      <div
+        className={cn(
+          "flex shrink-0 overflow-hidden rounded-xl transition-all duration-300 ease-out",
+          previewVisible ? "w-[400px]" : "w-0",
+        )}
+      >
+        {previewVisible && (
+          <GuidancePreviewPanel
+            guidance={previewGuidance}
+            personality={personality}
+            onClose={() => setPreviewVisible(false)}
+          />
+        )}
+      </div>
 
       {/* SlidePanel overlay for guidance detail */}
       <GuidanceDetailPanel

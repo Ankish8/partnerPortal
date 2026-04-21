@@ -34,6 +34,7 @@ import {
   RefreshCw,
   Trash2,
   History,
+  Eye,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -45,6 +46,7 @@ import { DocumentsPanel } from "@/components/train/documents-panel";
 import { CallRecordingsPanel } from "@/components/train/call-recordings-panel";
 import { WhatsAppPanel } from "@/components/train/whatsapp-panel";
 import { GuidancePreviewPanel } from "@/components/train/guidance-preview-panel";
+import { cn } from "@/lib/utils";
 
 type PanelType = "website" | "documents" | "calls" | "whatsapp";
 
@@ -73,6 +75,7 @@ export default function TrainPage() {
   const router = useRouter();
   const [activePanel, setActivePanel] = useState<PanelType | null>(null);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(true);
 
   // Convex queries
   const websiteSourcesRaw = useQuery(api.websiteSources.list);
@@ -174,6 +177,17 @@ export default function TrainPage() {
             <Database className="h-[18px] w-[18px] text-muted-foreground" />
             <h1 className="text-[17px] font-semibold">Knowledge Sources</h1>
           </div>
+          {!previewVisible && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full text-[13px]"
+              onClick={() => setPreviewVisible(true)}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Open preview
+            </Button>
+          )}
         </div>
 
         <div className="px-6 py-6">
@@ -349,8 +363,16 @@ export default function TrainPage() {
         </div>
       </div>
 
-      {/* Preview panel */}
-      <GuidancePreviewPanel />
+      <div
+        className={cn(
+          "flex shrink-0 overflow-hidden rounded-xl transition-all duration-300 ease-out",
+          previewVisible ? "w-[400px]" : "w-0",
+        )}
+      >
+        {previewVisible && (
+          <GuidancePreviewPanel onClose={() => setPreviewVisible(false)} />
+        )}
+      </div>
 
       {/* Remove confirmation dialog */}
       <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>

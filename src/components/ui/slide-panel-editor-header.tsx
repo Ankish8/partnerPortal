@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Play } from "lucide-react";
+import { X, Play, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -20,6 +20,8 @@ interface Props {
   onClose: () => void;
   emptyReason?: string | null;
   saveDisabledReason?: string | null;
+  showOpenPreview?: boolean;
+  onOpenPreview?: () => void;
 }
 
 export function SlidePanelEditorHeader({
@@ -34,6 +36,8 @@ export function SlidePanelEditorHeader({
   onClose,
   emptyReason,
   saveDisabledReason,
+  showOpenPreview = false,
+  onOpenPreview,
 }: Props) {
   return (
     <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-border/40">
@@ -48,6 +52,16 @@ export function SlidePanelEditorHeader({
         />
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        {showOpenPreview && onOpenPreview && (
+          <button
+            type="button"
+            onClick={onOpenPreview}
+            className="inline-flex items-center gap-1.5 rounded-full h-8 px-3.5 text-[13px] font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors cursor-pointer"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Open preview
+          </button>
+        )}
         <Tooltip>
           <TooltipTrigger
             render={

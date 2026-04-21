@@ -27,6 +27,9 @@ export function ProcedureStepEditor({
   const [steps, setSteps] = useState<string[]>(() => parseSteps(initialContent));
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [dragOverPlacement, setDragOverPlacement] = useState<
+    "before" | "after" | null
+  >(null);
   const textareaRefs = useRef<Array<HTMLTextAreaElement | null>>([]);
   const pendingFocusIndexRef = useRef<number | null>(null);
   const didMountRef = useRef(false);
@@ -95,43 +98,103 @@ export function ProcedureStepEditor({
     }
   };
 
-  const handleDrop = (targetIndex: number) => {
-    if (draggingIndex === null || draggingIndex === targetIndex) {
+  const handleDrop = () => {
+    if (
+      draggingIndex === null ||
+      dragOverIndex === null ||
+      dragOverPlacement === null
+    ) {
       setDraggingIndex(null);
       setDragOverIndex(null);
+      setDragOverPlacement(null);
       return;
     }
+
+    const rawTarget = dragOverIndex + (dragOverPlacement === "after" ? 1 : 0);
+    const targetIndex = draggingIndex < rawTarget ? rawTarget - 1 : rawTarget;
+    if (targetIndex === draggingIndex) {
+      setDraggingIndex(null);
+      setDragOverIndex(null);
+      setDragOverPlacement(null);
+      return;
+    }
+
     setSteps((prev) => reorder(prev, draggingIndex, targetIndex));
     pendingFocusIndexRef.current = targetIndex;
     setDraggingIndex(null);
     setDragOverIndex(null);
+    setDragOverPlacement(null);
   };
 
   return (
     <div className={cn("procedure-editor", className)}>
       <div className="space-y-1.5">
         {steps.map((step, index) => {
-          const isDropTarget = dragOverIndex === index && draggingIndex !== null;
+          const isDropBefore =
+            dragOverIndex === index &&
+            dragOverPlacement === "before" &&
+            draggingIndex !== null;
+          const isDropAfter =
+            dragOverIndex === index &&
+            dragOverPlacement === "after" &&
+            draggingIndex !== null;
           return (
             <div
               key={index}
               className={cn(
-                "group/step relative rounded-lg transition-colors",
-                isDropTarget && "bg-muted/40",
+                "group/step relative rounded-lg transition-colors before:absolute before:-left-3 before:top-0 before:h-full before:w-3 before:content-['']",
+                (isDropBefore || isDropAfter) && "bg-muted/30",
               )}
               onDragOver={(event) => {
                 if (!editable || draggingIndex === null) return;
                 event.preventDefault();
+                if (draggingIndex === index) {
+                  setDragOverIndex(null);
+                  setDragOverPlacement(null);
+                  return;
+                }
+                // Make row reordering predictable:
+                // dragging downward -> drop after hovered row
+                // dragging upward -> drop before hovered row
+                const placement = draggingIndex < index ? "after" : "before";
                 if (dragOverIndex !== index) {
                   setDragOverIndex(index);
+                }
+                if (dragOverPlacement !== placement) {
+                  setDragOverPlacement(placement);
                 }
               }}
               onDrop={(event) => {
                 if (!editable) return;
                 event.preventDefault();
-                handleDrop(index);
+                handleDrop();
+              }}
+              onDragEnd={() => {
+                setDraggingIndex(null);
+                setDragOverIndex(null);
+                setDragOverPlacement(null);
               }}
             >
+              {draggingIndex !== null && (
+                <>
+                  <div
+                    aria-hidden
+                    className="absolute -left-14 top-0 h-full w-14"
+                  />
+                  <div
+                    aria-hidden
+                    className="absolute -right-12 top-0 h-full w-12"
+                  />
+                </>
+              )}
+
+              {isDropBefore && (
+                <div className="pointer-events-none absolute -top-0.5 left-5 right-5 h-0.5 rounded-full bg-ring/70" />
+              )}
+              {isDropAfter && (
+                <div className="pointer-events-none absolute -bottom-0.5 left-5 right-5 h-0.5 rounded-full bg-ring/70" />
+              )}
+
               {editable && (
                 <div className="absolute left-0 top-1/2 z-10 flex -translate-y-1/2 -translate-x-[calc(100%+10px)] items-center gap-0.5 rounded-full border border-border/70 bg-background px-1 py-0.5 shadow-sm opacity-0 pointer-events-none transition-opacity group-hover/step:opacity-100 group-hover/step:pointer-events-auto">
                   <Button
@@ -150,10 +213,12 @@ export function ProcedureStepEditor({
                     onDragStart={(event) => {
                       setDraggingIndex(index);
                       event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", String(index));
                     }}
                     onDragEnd={() => {
                       setDraggingIndex(null);
                       setDragOverIndex(null);
+                      setDragOverPlacement(null);
                     }}
                     className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-grab active:cursor-grabbing"
                     aria-label="Reorder step"

@@ -6,6 +6,7 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { GuidancePreviewPanel } from "@/components/train/guidance-preview-panel";
 import {
   EscalationRuleTableRow,
@@ -26,6 +27,7 @@ import {
   MessageSquare,
   Search,
   SlidersHorizontal,
+  Eye,
 } from "lucide-react";
 
 type ToneOption = "friendly" | "neutral" | "matter-of-fact" | "professional" | "humorous";
@@ -74,6 +76,7 @@ export default function EscalationPage() {
   const [selectedGuidance, setSelectedGuidance] =
     useState<EscalationGuidanceItem | null>(null);
   const [search, setSearch] = useState("");
+  const [previewVisible, setPreviewVisible] = useState(true);
 
   const ruleDrafts = useMemo<EscalationRuleDraft[]>(
     () =>
@@ -302,6 +305,17 @@ export default function EscalationPage() {
             <Shield className="h-[18px] w-[18px] text-muted-foreground" />
             <h1 className="text-[17px] font-semibold">Escalation</h1>
           </div>
+          {!previewVisible && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full text-[13px]"
+              onClick={() => setPreviewVisible(true)}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Open preview
+            </Button>
+          )}
         </div>
 
         <div className="px-6 py-6">
@@ -459,13 +473,22 @@ export default function EscalationPage() {
         </div>
       </div>
 
-      {/* Preview panel */}
-      <GuidancePreviewPanel
-        personality={personality}
-        attributes={enabledAttributesForPreview}
-        escalationRules={enabledRulesForPreview}
-        escalationGuidance={enabledGuidanceForPreview}
-      />
+      <div
+        className={cn(
+          "flex shrink-0 overflow-hidden rounded-xl transition-all duration-300 ease-out",
+          previewVisible ? "w-[400px]" : "w-0",
+        )}
+      >
+        {previewVisible && (
+          <GuidancePreviewPanel
+            personality={personality}
+            attributes={enabledAttributesForPreview}
+            escalationRules={enabledRulesForPreview}
+            escalationGuidance={enabledGuidanceForPreview}
+            onClose={() => setPreviewVisible(false)}
+          />
+        )}
+      </div>
 
       {/* Rule editor slide panel */}
       <EscalationRuleSlidePanel
