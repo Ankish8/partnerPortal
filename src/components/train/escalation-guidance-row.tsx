@@ -2,12 +2,15 @@
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { modeLabel } from "./escalation-meta-selects";
 
 interface Props {
   title: string;
   content: string;
   enabled: boolean;
+  mode?: string;
   used: number;
+  resolved?: number;
   escalated?: number;
   isLast: boolean;
   onClick: () => void;
@@ -17,7 +20,9 @@ export function EscalationGuidanceRow({
   title,
   content,
   enabled,
+  mode,
   used,
+  resolved,
   escalated,
   isLast,
   onClick,
@@ -31,9 +36,14 @@ export function EscalationGuidanceRow({
       )}
     >
       <div className="min-w-0">
-        <p className="text-[14px] font-medium truncate">
-          {title.trim() || "Untitled"}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-[14px] font-medium truncate">
+            {title.trim() || "Untitled"}
+          </p>
+          <Badge variant="outline" className="shrink-0 !text-[10.5px] !py-0 !px-1.5 !h-[18px]">
+            {modeLabel(mode ?? "immediate")}
+          </Badge>
+        </div>
         <p className="text-[13px] text-muted-foreground line-clamp-1 mt-0.5">
           {content.trim() || "No content yet."}
         </p>
@@ -44,9 +54,11 @@ export function EscalationGuidanceRow({
         </Badge>
       </div>
       <span className="text-[14px] text-muted-foreground">{used}</span>
-      <span className="text-[14px] text-muted-foreground">—</span>
       <span className="text-[14px] text-muted-foreground">
-        {escalated !== undefined ? escalated : "—"}
+        {resolved ?? 0}
+      </span>
+      <span className="text-[14px] text-muted-foreground">
+        {escalated ?? 0}
       </span>
     </button>
   );

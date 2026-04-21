@@ -1,8 +1,7 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
-import { useMutation } from "convex/react";
 import {
   RotateCcw,
   X,
@@ -20,9 +19,6 @@ import {
   AlertCircle,
   BookOpen,
   ExternalLink,
-  ChevronDown,
-  CheckCircle2,
-  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -30,19 +26,17 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import {
   detectLanguage,
   type EscalationRuleInput,
 } from "@/lib/escalation-evaluator";
+import {
+  baselineReasonLabel,
+  type BaselineTrigger,
+  type EscalationMode,
+  type EscalationTriggeredBy,
+} from "@/lib/escalation-decision";
 
 export interface GuidanceRule {
   title: string;
@@ -93,6 +87,7 @@ export interface EscalationGuidanceSpec {
   _id?: Id<"escalationGuidance">;
   title: string;
   content: string;
+  mode?: "immediate" | "offer" | "ask_more" | "never";
 }
 
 export interface Citation {
@@ -110,6 +105,8 @@ interface ChatMessage {
   error?: boolean;
   citations?: Citation[];
   streaming?: boolean;
+  offerReplies?: string[];
+  offerConsumed?: boolean;
 }
 
 interface EventEntry {
@@ -139,7 +136,6 @@ export function GuidancePreviewPanel({
   escalationRules = [],
   escalationGuidance = [],
 }: GuidancePreviewPanelProps) {
-  const [previewTab, setPreviewTab] = useState<"customer" | "event">("customer");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [input, setInput] = useState("");
@@ -148,7 +144,7 @@ export function GuidancePreviewPanel({
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const endConversation = useMutation(api.conversations.end);
+  const timeline = useMemo(() => buildTimeline(messages, events), [messages, events]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -179,23 +175,11 @@ export function GuidancePreviewPanel({
     setConversationId(null);
   };
 
-  const handleEndConversation = async (outcome: "resolved" | "escalated") => {
-    const id = conversationId;
-    clearLocal();
-    if (!id) return;
-    try {
-      await endConversation({ conversationId: id, outcome });
-    } catch (err) {
-      console.error("Failed to end conversation:", err);
-    }
-  };
-
   const handleReset = () => {
     clearLocal();
   };
 
-  const handleSend = async () => {
-    const text = input.trim();
+  const sendMessage = async (text: string) => {
     if (!text || isLoading) return;
 
     const isFirstMessage = messages.length === 0;
@@ -206,7 +190,14 @@ export function GuidancePreviewPanel({
       content: text,
       timestamp: now,
     };
-    const nextMessages = [...messages, userMsg];
+    const nextMessages = [
+      ...messages.map((m) =>
+        m.role === "assistant" && m.offerReplies && !m.offerConsumed
+          ? { ...m, offerConsumed: true }
+          : m,
+      ),
+      userMsg,
+    ];
     setMessages(nextMessages);
     setInput("");
     setIsLoading(true);
@@ -335,13 +326,26 @@ export function GuidancePreviewPanel({
         if (meta.conversationId) {
           setConversationId(meta.conversationId as Id<"conversations">);
         }
+        const offerReplies =
+          meta.offerSuggestedReplies && meta.offerSuggestedReplies.length > 0
+            ? meta.offerSuggestedReplies
+            : undefined;
         ensureAssistantMessage();
         setMessages((prev) => {
-          const updated = prev.map((m) =>
-            m.id === assistantId
-              ? { ...m, citations: meta.citations, streaming: false }
-              : m
-          );
+          const updated = prev.map((m) => {
+            if (m.id === assistantId) {
+              return {
+                ...m,
+                citations: meta.citations,
+                streaming: false,
+                offerReplies,
+              };
+            }
+            if (m.role === "assistant" && m.offerReplies && !m.offerConsumed) {
+              return { ...m, offerConsumed: true };
+            }
+            return m;
+          });
           if (meta.followUp && meta.followUp.length > 0) {
             updated.push({
               id: `${assistantId}-follow`,
@@ -378,12 +382,53 @@ export function GuidancePreviewPanel({
           }));
           setEvents((prev) => [...prev, ...attrEvents]);
         }
-        if (meta.escalate) {
+        const baselineList = meta.baselineTriggers ?? [];
+        if (baselineList.length > 0) {
+          const baseNow = Date.now();
+          const baseEvents: EventEntry[] = baselineList.map((trigger, i) => ({
+            id: `evt-baseline-${baseNow}-${i}`,
+            timestamp: baseNow + 1 + i,
+            label: `Baseline signal: ${baselineReasonLabel(trigger)}`,
+            type: "escalation",
+          }));
+          setEvents((prev) => [...prev, ...baseEvents]);
+        }
+        if (meta.offerAcknowledged === "accepted") {
+          appendEvent(
+            "Escalation offer accepted",
+            "escalation",
+            "Customer accepted the offer to connect with a human.",
+          );
+        } else if (meta.offerAcknowledged === "declined") {
+          appendEvent(
+            "Escalation offer declined",
+            "escalation",
+            "Customer declined the offer — continuing the conversation.",
+          );
+        }
+        if (meta.forcedByDoubleOffer) {
+          appendEvent(
+            "Escalation forced after repeat offer",
+            "escalation",
+            "The previous assistant turn was already an offer — escalating to a human to avoid looping.",
+          );
+        }
+        const mode = meta.decisionMode ?? (meta.escalate ? "immediate" : "none");
+        if (mode === "offer") {
+          appendEvent(
+            "Escalation offered",
+            "escalation",
+            meta.escalationReason ?? undefined,
+          );
+        } else if (meta.escalate) {
           const byRule = meta.escalationTriggeredBy === "rule";
+          const byBaseline = meta.escalationTriggeredBy === "baseline";
           const ruleTitles = meta.escalationRuleTitles ?? [];
           const label = byRule
             ? `Escalation triggered by rule${ruleTitles.length === 1 ? "" : "s"}: ${ruleTitles.join(", ")}`
-            : `Escalation triggered by guidance`;
+            : byBaseline
+              ? "Escalation triggered by baseline signal"
+              : "Escalation triggered by guidance";
           const detail = meta.escalationReason ?? undefined;
           appendEvent(label, "escalation", detail);
         }
@@ -436,6 +481,17 @@ export function GuidancePreviewPanel({
     }
   };
 
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text) return;
+    void sendMessage(text);
+  };
+
+  const handleOfferReply = (text: string) => {
+    if (isLoading) return;
+    void sendMessage(text);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -464,40 +520,13 @@ export function GuidancePreviewPanel({
               )}
             </button>
           )}
-          {conversationId && messages.length > 0 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="flex h-8 items-center gap-1 rounded-lg px-2 hover:bg-muted transition-colors cursor-pointer text-[13px] text-muted-foreground"
-                aria-label="End conversation"
-              >
-                <RotateCcw className="h-[16px] w-[16px]" />
-                <ChevronDown className="h-[14px] w-[14px]" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={6}>
-                <DropdownMenuItem onClick={() => handleEndConversation("resolved")}>
-                  <CheckCircle2 className="text-emerald-600" />
-                  End as Resolved
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleEndConversation("escalated")}>
-                  <UserCog className="text-amber-600" />
-                  End as Escalated
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleReset}>
-                  <RotateCcw />
-                  Discard without saving
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <button
-              onClick={handleReset}
-              className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer"
-              aria-label="Reset conversation"
-            >
-              <RotateCcw className="h-[18px] w-[18px] text-muted-foreground" />
-            </button>
-          )}
+          <button
+            onClick={handleReset}
+            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer"
+            aria-label="Reset conversation"
+          >
+            <RotateCcw className="h-[18px] w-[18px] text-muted-foreground" />
+          </button>
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer"
@@ -507,67 +536,50 @@ export function GuidancePreviewPanel({
         </div>
       </div>
 
-      <div className="flex border-t border-border/40 px-2">
-        <button
-          onClick={() => setPreviewTab("customer")}
-          className={`px-4 py-3.5 text-[14px] font-medium transition-colors cursor-pointer ${
-            previewTab === "customer"
-              ? "border-b-[2.5px] border-[#e87537] text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Customer view
-        </button>
-        <button
-          onClick={() => setPreviewTab("event")}
-          className={`px-4 py-3.5 text-[14px] font-medium transition-colors cursor-pointer ${
-            previewTab === "event"
-              ? "border-b-[2.5px] border-[#e87537] text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Event log
-        </button>
-      </div>
-
       <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto border-t border-border/40">
-        {previewTab === "customer" ? (
-          messages.length === 0 && !isLoading && !showEvents ? (
-            <div className="flex flex-1 flex-col items-center justify-center px-10 text-center">
-              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-muted/60">
-                <Bot className="h-7 w-7 text-muted-foreground/70" />
-              </div>
-              <p className="text-[14px] leading-[1.6] text-muted-foreground">
-                Ask your agent a question your customers might ask, to preview its response.
-              </p>
+        {messages.length === 0 && !isLoading && !showEvents ? (
+          <div className="flex flex-1 flex-col items-center justify-center px-10 text-center">
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-muted/60">
+              <Bot className="h-7 w-7 text-muted-foreground/70" />
             </div>
-          ) : showEvents ? (
-            <div className="flex flex-col gap-2 px-5 py-5">
-              {buildTimeline(messages, events).map((item) =>
-                item.kind === "event" ? (
-                  <InlineEventRow key={item.id} event={item.data} />
-                ) : (
-                  <MessageBubble key={item.id} message={item.data} />
-                )
+            <p className="text-[14px] leading-[1.6] text-muted-foreground">
+              Ask your agent a question your customers might ask, to preview its response.
+            </p>
+          </div>
+        ) : showEvents ? (
+          <div className="flex flex-col gap-2 px-5 py-5">
+            {timeline.map((item) =>
+              item.kind === "event" ? (
+                <InlineEventRow key={item.id} event={item.data} />
+              ) : (
+                <MessageBubble
+                  key={item.id}
+                  message={item.data}
+                  onOfferReply={handleOfferReply}
+                  disableOfferChips={isLoading}
+                />
+              )
+            )}
+            {isLoading &&
+              !messages.some((m) => m.role === "assistant" && m.streaming) && (
+                <TypingIndicator />
               )}
-              {isLoading &&
-                !messages.some((m) => m.role === "assistant" && m.streaming) && (
-                  <TypingIndicator />
-                )}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3 px-5 py-5">
-              {messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} />
-              ))}
-              {isLoading &&
-                !messages.some((m) => m.role === "assistant" && m.streaming) && (
-                  <TypingIndicator />
-                )}
-            </div>
-          )
+          </div>
         ) : (
-          <EventLog events={events} />
+          <div className="flex flex-col gap-3 px-5 py-5">
+            {messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                onOfferReply={handleOfferReply}
+                disableOfferChips={isLoading}
+              />
+            ))}
+            {isLoading &&
+              !messages.some((m) => m.role === "assistant" && m.streaming) && (
+                <TypingIndicator />
+              )}
+          </div>
         )}
       </div>
 
@@ -629,8 +641,14 @@ type StreamEvent =
       conversationId?: string | null;
       escalate?: boolean;
       escalationReason?: string | null;
-      escalationTriggeredBy?: "rule" | "guidance" | null;
+      escalationTriggeredBy?: EscalationTriggeredBy | null;
       escalationRuleTitles?: string[];
+      decisionMode?: EscalationMode;
+      baselineTriggers?: BaselineTrigger[];
+      topBaselineTrigger?: BaselineTrigger | null;
+      offerSuggestedReplies?: string[];
+      offerAcknowledged?: "accepted" | "declined" | null;
+      forcedByDoubleOffer?: boolean;
     }
   | { type: "error"; message: string };
 
@@ -732,14 +750,27 @@ function CitationBadge({ citation }: { citation: Citation }) {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({
+  message,
+  onOfferReply,
+  disableOfferChips,
+}: {
+  message: ChatMessage;
+  onOfferReply?: (text: string) => void;
+  disableOfferChips?: boolean;
+}) {
   const isUser = message.role === "user";
   const renderAsMarkdown = !isUser && !message.error;
   const citations = message.citations ?? [];
   const citationMap = new Map(citations.map((c) => [c.id, c]));
+  const showOfferChips =
+    !isUser &&
+    !!message.offerReplies &&
+    message.offerReplies.length > 0 &&
+    !message.offerConsumed;
 
   return (
-    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex flex-col gap-2", isUser ? "items-end" : "items-start")}>
       <div
         className={cn(
           "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-[1.5]",
@@ -810,6 +841,26 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           message.content
         )}
       </div>
+      {showOfferChips && (
+        <div className="flex flex-wrap gap-1.5">
+          {message.offerReplies!.map((reply) => (
+            <button
+              key={reply}
+              type="button"
+              onClick={() => onOfferReply?.(reply)}
+              disabled={disableOfferChips}
+              className={cn(
+                "rounded-full border border-border/70 bg-white px-3 py-1.5 text-[12.5px] font-medium text-foreground/80 transition-colors",
+                disableOfferChips
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:border-[#e87537] hover:text-[#e87537] cursor-pointer",
+              )}
+            >
+              {reply}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -904,37 +955,3 @@ function InlineEventRow({ event }: { event: EventEntry }) {
   );
 }
 
-function EventLog({ events }: { events: EventEntry[] }) {
-  if (events.length === 0) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center px-10 text-center">
-        <p className="text-[13px] text-muted-foreground">
-          Events will appear here when you start a conversation.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col divide-y divide-border/40">
-      {events.map((e) => (
-        <div key={e.id} className="px-5 py-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-medium text-foreground">{e.label}</span>
-            <span className="text-[11.5px] text-muted-foreground tabular-nums">
-              {new Date(e.timestamp).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
-            </span>
-          </div>
-          {e.detail && (
-            <p className="mt-1 text-[12.5px] leading-[1.5] text-muted-foreground line-clamp-3">
-              {e.detail}
-            </p>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}

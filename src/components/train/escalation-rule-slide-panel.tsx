@@ -20,6 +20,12 @@ import {
   isConditionComplete,
   nanoid,
 } from "./escalation-rule-editor-primitives";
+import {
+  ModeSelect,
+  AudienceSelect,
+  ChannelSelect,
+  RULE_MODE_OPTIONS,
+} from "./escalation-meta-selects";
 
 interface Props {
   open: boolean;
@@ -288,6 +294,30 @@ export function EscalationRuleSlidePanel({
 
           {/* Scrollable conditions area */}
           <div className="flex-1 overflow-y-auto px-6 py-5">
+            {/* Behavior row */}
+            <div className="mb-5 flex flex-wrap items-center gap-2">
+              <span className="text-[12.5px] text-muted-foreground">
+                When matched
+              </span>
+              <ModeSelect
+                value={state.mode ?? "immediate"}
+                onChange={(v) => setState((s) => (s ? { ...s, mode: v } : s))}
+                options={RULE_MODE_OPTIONS}
+              />
+              <span className="mx-2 text-muted-foreground/40">·</span>
+              <AudienceSelect
+                value={state.audience ?? "Everyone"}
+                onChange={(v) =>
+                  setState((s) => (s ? { ...s, audience: v } : s))
+                }
+              />
+              <ChannelSelect
+                value={state.channels ?? "All channels"}
+                onChange={(v) =>
+                  setState((s) => (s ? { ...s, channels: v } : s))
+                }
+              />
+            </div>
             <p className="text-[13px] font-semibold text-foreground mb-3">Conditions</p>
             <div className="flex items-center gap-2 flex-wrap">
               {hasConditions &&

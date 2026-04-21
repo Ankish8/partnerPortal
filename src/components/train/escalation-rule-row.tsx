@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { operatorLabel, type SystemFieldKey } from "@/lib/escalation-system-fields";
+import { modeLabel } from "./escalation-meta-selects";
 import type {
   EscalationRuleDraft,
   EscalationConditionDraft,
@@ -13,6 +14,7 @@ export {
   narrowDraftCondition,
   emptyConditionGroupDraft,
   type EscalationRuleDraft,
+  type EscalationRuleMode,
   type EscalationConditionDraft,
   type EscalationConditionGroupDraft,
   type AttributeRef,
@@ -69,9 +71,14 @@ export function EscalationRuleTableRow({ rule, attributes, isLast, onClick }: Pr
       )}
     >
       <div className="min-w-0">
-        <p className="text-[14px] font-medium truncate">
-          {rule.title.trim() || "Untitled"}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-[14px] font-medium truncate">
+            {rule.title.trim() || "Untitled"}
+          </p>
+          <Badge variant="outline" className="shrink-0 !text-[10.5px] !py-0 !px-1.5 !h-[18px]">
+            {modeLabel(rule.mode ?? "immediate")}
+          </Badge>
+        </div>
         <p className="text-[13px] text-muted-foreground line-clamp-1 mt-0.5">
           {summary}
         </p>
@@ -82,8 +89,12 @@ export function EscalationRuleTableRow({ rule, attributes, isLast, onClick }: Pr
         </Badge>
       </div>
       <span className="text-[14px] text-muted-foreground">{rule.stats.matched}</span>
-      <span className="text-[14px] text-muted-foreground">—</span>
-      <span className="text-[14px] text-muted-foreground">—</span>
+      <span className="text-[14px] text-muted-foreground">
+        {rule.stats.resolved ?? 0}
+      </span>
+      <span className="text-[14px] text-muted-foreground">
+        {rule.stats.escalated ?? 0}
+      </span>
     </button>
   );
 }

@@ -16,6 +16,13 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import {
   ESCALATION_GUIDANCE_SEEDS,
 } from "@/components/train/escalation-templates";
+import {
+  ModeSelect,
+  AudienceSelect,
+  ChannelSelect,
+  GUIDANCE_MODE_OPTIONS,
+  type GuidanceMode,
+} from "./escalation-meta-selects";
 
 export interface EscalationGuidanceItem {
   _id?: Id<"escalationGuidance">;
@@ -24,6 +31,7 @@ export interface EscalationGuidanceItem {
   enabled: boolean;
   audience: string;
   channels: string;
+  mode: GuidanceMode;
   isNew?: boolean;
 }
 
@@ -47,6 +55,9 @@ export function EscalationGuidancePanel({
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editEnabled, setEditEnabled] = useState(false);
+  const [editMode, setEditMode] = useState<GuidanceMode>("immediate");
+  const [editAudience, setEditAudience] = useState("Everyone");
+  const [editChannels, setEditChannels] = useState("All channels");
   const [previewVisible, setPreviewVisible] = useState(true);
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
 
@@ -56,6 +67,9 @@ export function EscalationGuidancePanel({
       setEditTitle(item.title);
       setEditContent(item.content);
       setEditEnabled(item.enabled);
+      setEditMode(item.mode ?? "immediate");
+      setEditAudience(item.audience ?? "Everyone");
+      setEditChannels(item.channels ?? "All channels");
       setPreviewVisible(true);
     }
   }, [item]);
@@ -67,7 +81,10 @@ export function EscalationGuidancePanel({
   const hasChanges =
     editTitle !== item.title ||
     editContent !== item.content ||
-    editEnabled !== item.enabled;
+    editEnabled !== item.enabled ||
+    editMode !== (item.mode ?? "immediate") ||
+    editAudience !== (item.audience ?? "Everyone") ||
+    editChannels !== (item.channels ?? "All channels");
 
   const canSave = hasChanges && !titleEmpty && !contentEmpty;
   const canEnable = !contentEmpty && !titleEmpty;
@@ -83,12 +100,28 @@ export function EscalationGuidancePanel({
 
   const handleSave = () => {
     if (!canSave) return;
-    onSave({ ...item, title: editTitle, content: editContent, enabled: editEnabled });
+    onSave({
+      ...item,
+      title: editTitle,
+      content: editContent,
+      enabled: editEnabled,
+      mode: editMode,
+      audience: editAudience,
+      channels: editChannels,
+    });
   };
 
   const handleEnable = () => {
     if (!canEnable) return;
-    onSave({ ...item, title: editTitle, content: editContent, enabled: !editEnabled });
+    onSave({
+      ...item,
+      title: editTitle,
+      content: editContent,
+      enabled: !editEnabled,
+      mode: editMode,
+      audience: editAudience,
+      channels: editChannels,
+    });
   };
 
   const requestClose = () => {
@@ -128,6 +161,26 @@ export function EscalationGuidancePanel({
             />
 
             <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col">
+              {/* Behavior row */}
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="text-[12.5px] text-muted-foreground">
+                  When this applies
+                </span>
+                <ModeSelect
+                  value={editMode}
+                  onChange={setEditMode}
+                  options={GUIDANCE_MODE_OPTIONS}
+                />
+                <span className="mx-2 text-muted-foreground/40">·</span>
+                <AudienceSelect
+                  value={editAudience}
+                  onChange={setEditAudience}
+                />
+                <ChannelSelect
+                  value={editChannels}
+                  onChange={setEditChannels}
+                />
+              </div>
               <p className="text-[14px] text-muted-foreground mb-2">
                 Describe when the agent should hand off to a human. The agent will
                 read this as natural language guidance.

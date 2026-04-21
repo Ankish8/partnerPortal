@@ -44,12 +44,17 @@ export interface EscalationConditionGroupDraft {
   conditions: EscalationConditionDraft[];
 }
 
+export type EscalationRuleMode = "immediate" | "offer";
+
 export interface EscalationRuleDraft {
   _id?: Id<"escalationRules">;
   title: string;
   enabled: boolean;
+  mode: EscalationRuleMode;
+  audience: string;
+  channels: string;
   conditionGroups: EscalationConditionGroupDraft[];
-  stats: { matched: number };
+  stats: { matched: number; resolved?: number; escalated?: number };
 }
 
 export interface AttributeRef {

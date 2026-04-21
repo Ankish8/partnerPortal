@@ -1,154 +1,411 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { useQuery } from "convex/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  BarChart3, TrendingUp, TrendingDown, Users, MessageSquare, Clock,
-  CheckCircle2, AlertCircle, Bot, Brain, Phone,
+  BarChart3,
+  MessageSquare,
+  CheckCircle2,
+  AlertCircle,
+  UserCog,
+  HandHelping,
+  Bot,
+  Shield,
+  Sparkles,
 } from "lucide-react";
 import { ContentPanel } from "@/components/layout/content-panel";
+import { cn } from "@/lib/utils";
+import { baselineReasonLabel, isBaselineTrigger } from "@/lib/escalation-decision";
+import { modeLabel, type GuidanceMode } from "@/components/train/escalation-meta-selects";
+import { api } from "../../../../convex/_generated/api";
 
-const metrics = [
-  { label: "Total Conversations", value: "1,247", change: "+12%", trend: "up" as const, icon: MessageSquare },
-  { label: "Resolution Rate", value: "89%", change: "+3%", trend: "up" as const, icon: CheckCircle2 },
-  { label: "Avg Response Time", value: "1.2s", change: "-0.3s", trend: "up" as const, icon: Clock },
-  { label: "Human Handoffs", value: "138", change: "-8%", trend: "up" as const, icon: Users },
-];
+type Window = "24h" | "7d" | "30d" | "all";
 
-const recentConversations = [
-  { id: "1", customer: "+91 98765 43210", intent: "Appointment Booking", status: "resolved" as const, messages: 8, duration: "2m 15s", time: "10 minutes ago" },
-  { id: "2", customer: "+91 87654 32109", intent: "Pricing Inquiry", status: "resolved" as const, messages: 5, duration: "1m 30s", time: "25 minutes ago" },
-  { id: "3", customer: "+91 76543 21098", intent: "Refund Request", status: "escalated" as const, messages: 12, duration: "5m 42s", time: "1 hour ago" },
-  { id: "4", customer: "+91 65432 10987", intent: "Product Support", status: "ongoing" as const, messages: 3, duration: "45s", time: "Just now" },
-];
+const WINDOW_LABELS: Record<Window, string> = {
+  "24h": "24h",
+  "7d": "7 days",
+  "30d": "30 days",
+  all: "All time",
+};
 
-const topIntents = [
-  { name: "Appointment Booking", count: 342, percentage: 27 },
-  { name: "Pricing Inquiry", count: 289, percentage: 23 },
-  { name: "General FAQ", count: 256, percentage: 21 },
-  { name: "Product Support", count: 198, percentage: 16 },
-  { name: "Refund Request", count: 162, percentage: 13 },
-];
-
-const statusVariant = {
-  resolved: "success",
-  escalated: "outline",
-  ongoing: "outline",
+const SOURCE_META = {
+  baseline: {
+    label: "Baseline signal",
+    icon: Shield,
+    color: "bg-sky-500",
+    tint: "bg-sky-500/15",
+    accent: "text-sky-700",
+  },
+  rule: {
+    label: "Rule match",
+    icon: AlertCircle,
+    color: "bg-amber-500",
+    tint: "bg-amber-500/15",
+    accent: "text-amber-700",
+  },
+  guidance: {
+    label: "Guidance match",
+    icon: Sparkles,
+    color: "bg-violet-500",
+    tint: "bg-violet-500/15",
+    accent: "text-violet-700",
+  },
+  offer_accepted: {
+    label: "Offer accepted",
+    icon: HandHelping,
+    color: "bg-emerald-500",
+    tint: "bg-emerald-500/15",
+    accent: "text-emerald-700",
+  },
 } as const;
 
+const SOURCE_META_KEYS = Object.keys(SOURCE_META) as Array<
+  keyof typeof SOURCE_META
+>;
+
+function formatPercent(n: number): string {
+  if (!Number.isFinite(n)) return "0%";
+  return `${Math.round(n * 100)}%`;
+}
+
 export default function AnalyzePage() {
+  const [window, setWindow] = useState<Window>("7d");
+  const metrics = useQuery(api.analytics.getEscalationMetrics, { window });
+  const loading = metrics === undefined;
+
+  const reasonTotal = metrics
+    ? metrics.reasonBreakdown.baseline +
+      metrics.reasonBreakdown.rule +
+      metrics.reasonBreakdown.guidance +
+      metrics.reasonBreakdown.offer_accepted
+    : 0;
+
   return (
     <ContentPanel>
-    <div className="mx-auto max-w-5xl px-8 py-10">
-      <div className="mb-8 flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <h1 className="font-serif text-[28px] leading-[1.2] tracking-[-0.03em]">Analytics</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">Monitor your agent&apos;s performance and review conversations.</p>
-        </div>
-        <Tabs defaultValue="7d">
-          <TabsList>
-            <TabsTrigger value="24h">24h</TabsTrigger>
-            <TabsTrigger value="7d">7 days</TabsTrigger>
-            <TabsTrigger value="30d">30 days</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-
-      <div className="mb-8 grid grid-cols-4 gap-4">
-        {metrics.map((metric) => {
-          const Icon = metric.icon;
-          return (
-            <Card key={metric.label}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                  <div className={`flex items-center gap-0.5 text-xs font-medium ${metric.trend === "up" ? "text-emerald-600" : "text-red-600"}`}>
-                    {metric.trend === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    {metric.change}
-                  </div>
-                </div>
-                <p className="text-2xl font-bold">{metric.value}</p>
-                <p className="text-xs text-muted-foreground">{metric.label}</p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Recent Conversations</h2>
-            <Button size="sm" variant="ghost">View all</Button>
-          </div>
-          <Card>
-            <div className="divide-y">
-              {recentConversations.map((conv) => (
-                <div key={conv.id} className="flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted shrink-0">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">{conv.customer}</p>
-                      <Badge variant={statusVariant[conv.status]}>{conv.status}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {conv.intent} &middot; {conv.messages} messages &middot; {conv.duration}
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0">{conv.time}</span>
-                </div>
-              ))}
+      <div className="mx-auto max-w-6xl px-8 py-10">
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <div className="mb-1 flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <h1 className="font-serif text-[28px] leading-[1.2] tracking-[-0.03em]">
+                Analytics
+              </h1>
             </div>
+            <p className="text-sm text-muted-foreground">
+              Monitor escalation outcomes and where handoffs are coming from.
+            </p>
+          </div>
+          <Tabs
+            value={window}
+            onValueChange={(v) => setWindow((v as Window) ?? "7d")}
+          >
+            <TabsList>
+              <TabsTrigger value="24h">24h</TabsTrigger>
+              <TabsTrigger value="7d">7 days</TabsTrigger>
+              <TabsTrigger value="30d">30 days</TabsTrigger>
+              <TabsTrigger value="all">All time</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="mb-8 grid grid-cols-4 gap-4">
+          <KpiTile
+            icon={MessageSquare}
+            label="Total conversations"
+            value={
+              loading ? "—" : metrics.totalConversations.toLocaleString()
+            }
+            hint={
+              loading
+                ? undefined
+                : `${metrics.endedConversations} ended`
+            }
+          />
+          <KpiTile
+            icon={CheckCircle2}
+            label="Resolved"
+            value={loading ? "—" : metrics.resolvedCount.toLocaleString()}
+            hint={
+              loading || metrics.endedConversations === 0
+                ? undefined
+                : `${formatPercent(
+                    metrics.resolvedCount / metrics.endedConversations,
+                  )} of ended`
+            }
+            accent="text-emerald-600"
+          />
+          <KpiTile
+            icon={UserCog}
+            label="Escalated"
+            value={loading ? "—" : metrics.escalatedCount.toLocaleString()}
+            hint={
+              loading || metrics.endedConversations === 0
+                ? undefined
+                : `${formatPercent(metrics.escalationRate)} escalation rate`
+            }
+            accent="text-amber-600"
+          />
+          <KpiTile
+            icon={HandHelping}
+            label="Offers extended"
+            value={
+              loading ? "—" : metrics.offerStats.offered.toLocaleString()
+            }
+            hint={
+              loading
+                ? undefined
+                : metrics.offerStats.offered > 0
+                  ? `${metrics.offerStats.accepted} accepted · ${metrics.offerStats.declined} declined`
+                  : "No offers yet"
+            }
+          />
+        </div>
+
+        <div className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">
+              Escalation source breakdown
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              {WINDOW_LABELS[window]}
+            </span>
+          </div>
+          <Card>
+            <CardContent className="p-5">
+              {loading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : reasonTotal === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No escalations in this window yet.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex h-2 overflow-hidden rounded-full bg-muted">
+                    {SOURCE_META_KEYS.map((key) => {
+                      const value = metrics.reasonBreakdown[key];
+                      if (value === 0) return null;
+                      const pct = (value / reasonTotal) * 100;
+                      return (
+                        <div
+                          key={key}
+                          className={cn("h-full", SOURCE_META[key].color)}
+                          style={{ width: `${pct}%` }}
+                          title={`${SOURCE_META[key].label}: ${value}`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {SOURCE_META_KEYS.map((key) => {
+                      const meta = SOURCE_META[key];
+                      const Icon = meta.icon;
+                      const value = metrics.reasonBreakdown[key];
+                      const pct =
+                        reasonTotal > 0 ? value / reasonTotal : 0;
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-background p-3"
+                        >
+                          <div
+                            className={cn(
+                              "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                              meta.tint,
+                            )}
+                          >
+                            <Icon className={cn("h-3.5 w-3.5", meta.accent)} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {meta.label}
+                            </p>
+                            <p className="text-lg font-semibold leading-tight">
+                              {value}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {formatPercent(pct)} of escalations
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
           </Card>
         </div>
 
-        <div>
-          <div className="mb-3"><h2 className="text-sm font-semibold">Top Intents</h2></div>
-          <Card>
-            <CardContent className="p-4 space-y-4">
-              {topIntents.map((intent) => (
-                <div key={intent.name}>
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-xs font-medium">{intent.name}</p>
-                    <span className="text-xs text-muted-foreground">{intent.count}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${intent.percentage}%` }} />
-                  </div>
+        <div className="mb-8 grid grid-cols-2 gap-6">
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Top triggering rules</h2>
+              <span className="text-xs text-muted-foreground">
+                {WINDOW_LABELS[window]}
+              </span>
+            </div>
+            <Card>
+              {loading ? (
+                <CardContent className="p-5 text-sm text-muted-foreground">
+                  Loading…
+                </CardContent>
+              ) : metrics.topRules.length === 0 ? (
+                <CardContent className="p-5 text-sm text-muted-foreground">
+                  No rule matches in this window.
+                </CardContent>
+              ) : (
+                <div className="divide-y">
+                  {metrics.topRules.map((rule) => (
+                    <div
+                      key={rule.ruleId}
+                      className="flex items-center justify-between px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1 pr-3">
+                        <p className="truncate text-sm font-medium">
+                          {rule.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {rule.matched} match
+                          {rule.matched === 1 ? "" : "es"} lifetime ·{" "}
+                          {rule.windowEscalated} escalated in window
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="shrink-0">
+                        {rule.windowEscalated}
+                      </Badge>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+              )}
+            </Card>
+          </div>
 
-          <Card className="mt-4">
-            <CardContent className="p-4">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Agent Performance</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><Bot className="h-3.5 w-3.5 text-primary" /><span className="text-xs">Auto-resolved</span></div>
-                  <span className="text-sm font-semibold">89%</span>
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Top guidance matches</h2>
+              <span className="text-xs text-muted-foreground">
+                {WINDOW_LABELS[window]}
+              </span>
+            </div>
+            <Card>
+              {loading ? (
+                <CardContent className="p-5 text-sm text-muted-foreground">
+                  Loading…
+                </CardContent>
+              ) : metrics.topGuidance.length === 0 ? (
+                <CardContent className="p-5 text-sm text-muted-foreground">
+                  No guidance activity in this window.
+                </CardContent>
+              ) : (
+                <div className="divide-y">
+                  {metrics.topGuidance.map((g) => (
+                    <div
+                      key={g.guidanceId}
+                      className="flex items-center justify-between px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1 pr-3">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-medium">
+                            {g.title}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 !text-[10.5px] !py-0 !px-1.5 !h-[18px]"
+                          >
+                            {modeLabel(g.mode as GuidanceMode)}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {g.used} use{g.used === 1 ? "" : "s"} lifetime ·{" "}
+                          {g.windowEscalated} escalated in window
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="shrink-0">
+                        {g.windowEscalated}
+                      </Badge>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><Brain className="h-3.5 w-3.5 text-purple-600" /><span className="text-xs">Intent accuracy</span></div>
-                  <span className="text-sm font-semibold">94%</span>
+              )}
+            </Card>
+          </div>
+        </div>
+
+        <div className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Baseline trigger mix</h2>
+            <span className="text-xs text-muted-foreground">
+              {WINDOW_LABELS[window]}
+            </span>
+          </div>
+          <Card>
+            <CardContent className="p-5">
+              {loading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : Object.keys(metrics.baselineTriggerCounts).length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No baseline-driven escalations in this window.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {Object.entries(metrics.baselineTriggerCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([trigger, count]) => {
+                      const label = isBaselineTrigger(trigger)
+                        ? baselineReasonLabel(trigger)
+                        : trigger;
+                      return (
+                        <div
+                          key={trigger}
+                          className="flex items-center justify-between rounded-lg border border-border/50 bg-background px-3 py-2.5"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+                            <p className="text-sm">{label}</p>
+                          </div>
+                          <Badge variant="outline">{count}</Badge>
+                        </div>
+                      );
+                    })}
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><AlertCircle className="h-3.5 w-3.5 text-amber-600" /><span className="text-xs">Escalation rate</span></div>
-                  <span className="text-sm font-semibold">11%</span>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
-    </div>
     </ContentPanel>
   );
 }
+
+function KpiTile({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <Icon className={cn("h-4 w-4", accent ?? "text-muted-foreground")} />
+        </div>
+        <p className="text-2xl font-bold">{value}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        {hint && (
+          <p className="mt-1 text-[11px] text-muted-foreground/80">{hint}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+

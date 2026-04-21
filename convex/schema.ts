@@ -130,22 +130,49 @@ export default defineSchema({
 
   // Conversations — preview-panel sessions used for attribute counters
   conversations: defineTable({
-    endedAt: v.optional(v.number()),
-    outcome: v.optional(
-      v.union(v.literal("resolved"), v.literal("escalated")),
-    ),
     detections: v.array(
       v.object({
         attributeId: v.id("attributes"),
         valueId: v.string(),
       }),
     ),
-  }).index("by_outcome", ["outcome"]),
+    matchedRuleIds: v.optional(v.array(v.id("escalationRules"))),
+    appliedGuidanceIds: v.optional(v.array(v.id("escalationGuidance"))),
+    // Fin-parity escalation state
+    offerState: v.optional(
+      v.union(
+        v.literal("none"),
+        v.literal("offered"),
+        v.literal("accepted"),
+        v.literal("declined"),
+      ),
+    ),
+    lastOfferAt: v.optional(v.number()),
+    lastAssistantAction: v.optional(
+      v.union(
+        v.literal("normal"),
+        v.literal("offer"),
+        v.literal("escalated"),
+      ),
+    ),
+    escalationSource: v.optional(
+      v.union(
+        v.literal("baseline"),
+        v.literal("rule"),
+        v.literal("guidance"),
+        v.literal("offer_accepted"),
+      ),
+    ),
+    baselineTrigger: v.optional(v.string()),
+  }),
 
   // Escalation rules — deterministic conditions that hand off the conversation to a human
   escalationRules: defineTable({
     title: v.string(),
     enabled: v.boolean(),
+    mode: v.optional(v.union(v.literal("immediate"), v.literal("offer"))),
+    audience: v.optional(v.string()),
+    channels: v.optional(v.string()),
     // OR across condition groups; AND within each group
     conditionGroups: v.array(
       v.object({
@@ -199,6 +226,8 @@ export default defineSchema({
     ),
     stats: v.object({
       matched: v.number(),
+      resolved: v.optional(v.number()),
+      escalated: v.optional(v.number()),
     }),
   }).index("by_enabled", ["enabled"]),
 
@@ -209,11 +238,43 @@ export default defineSchema({
     enabled: v.boolean(),
     audience: v.string(),
     channels: v.string(),
+    mode: v.optional(
+      v.union(
+        v.literal("immediate"),
+        v.literal("offer"),
+        v.literal("ask_more"),
+        v.literal("never"),
+      ),
+    ),
     stats: v.object({
       used: v.number(),
+      resolved: v.optional(v.number()),
       escalated: v.optional(v.number()),
     }),
   }).index("by_enabled", ["enabled"]),
+
+  // Procedures — multi-step natural-language workflows (Fin-parity)
+  procedures: defineTable({
+    title: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("live"),
+      v.literal("archived"),
+    ),
+    triggerDescription: v.string(),
+    examples: v.array(v.string()),
+    audience: v.string(),
+    channels: v.string(),
+    // TipTap ProseMirror JSON document stored as-is
+    bodyJSON: v.any(),
+    publishedAt: v.optional(v.number()),
+    stats: v.object({
+      invocations: v.number(),
+      completed: v.optional(v.number()),
+      escalated: v.optional(v.number()),
+      abandoned: v.optional(v.number()),
+    }),
+  }).index("by_status", ["status"]),
 
   // WhatsApp chat imports
   whatsappChats: defineTable({

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as analytics from "../analytics.js";
 import type * as attributes from "../attributes.js";
 import type * as callRecordings from "../callRecordings.js";
 import type * as conversations from "../conversations.js";
@@ -17,6 +18,7 @@ import type * as escalationRules from "../escalationRules.js";
 import type * as guidanceItems from "../guidanceItems.js";
 import type * as guidanceSettings from "../guidanceSettings.js";
 import type * as lib from "../lib.js";
+import type * as procedures from "../procedures.js";
 import type * as rag from "../rag.js";
 import type * as syncedPages from "../syncedPages.js";
 import type * as websiteSources from "../websiteSources.js";
@@ -29,6 +31,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  analytics: typeof analytics;
   attributes: typeof attributes;
   callRecordings: typeof callRecordings;
   conversations: typeof conversations;
@@ -38,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   guidanceItems: typeof guidanceItems;
   guidanceSettings: typeof guidanceSettings;
   lib: typeof lib;
+  procedures: typeof procedures;
   rag: typeof rag;
   syncedPages: typeof syncedPages;
   websiteSources: typeof websiteSources;

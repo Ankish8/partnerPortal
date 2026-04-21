@@ -39,6 +39,7 @@ const navItems: NavItem[] = [
       { label: "Guidance", href: "/train/guidance" },
       { label: "Attributes", href: "/train/attributes" },
       { label: "Escalation", href: "/train/escalation" },
+      { label: "Procedures", href: "/train/procedures" },
     ],
   },
   {

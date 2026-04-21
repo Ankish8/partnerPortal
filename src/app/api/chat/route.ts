@@ -1,13 +1,27 @@
 import { NextRequest } from "next/server";
-import { fetchAction, fetchMutation } from "convex/nextjs";
+import { fetchAction, fetchMutation, fetchQuery } from "convex/nextjs";
 import { parse as parsePartial, Allow } from "partial-json";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
   evaluateEscalationRules,
+  evaluateRulesPreLLM,
   detectLanguageHeuristic,
   type EscalationRuleInput,
 } from "@/lib/escalation-evaluator";
+import {
+  resolveEscalationDecision,
+  decisionSourceForAnalytics,
+  BASELINE_TRIGGERS,
+  isBaselineTrigger,
+  type BaselineTrigger,
+  type EscalationMode,
+  type EscalationTriggeredBy,
+  type RuleChoice,
+  type GuidanceChoice,
+} from "@/lib/escalation-decision";
+
+type OfferResponseKind = "accepted" | "declined" | "unclear" | "not_applicable";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -74,6 +88,7 @@ interface EscalationGuidanceSpec {
   _id?: string;
   title: string;
   content: string;
+  mode?: "immediate" | "offer" | "ask_more" | "never";
 }
 
 type StreamEvent =
@@ -90,8 +105,14 @@ type StreamEvent =
       conversationId: string | null;
       escalate: boolean;
       escalationReason: string | null;
-      escalationTriggeredBy: "rule" | "guidance" | null;
+      escalationTriggeredBy: EscalationTriggeredBy | null;
       escalationRuleTitles: string[];
+      decisionMode: EscalationMode;
+      baselineTriggers: BaselineTrigger[];
+      topBaselineTrigger: BaselineTrigger | null;
+      offerSuggestedReplies: string[];
+      offerAcknowledged: "accepted" | "declined" | null;
+      forcedByDoubleOffer: boolean;
     }
   | { type: "error"; message: string };
 
@@ -188,22 +209,95 @@ function buildAttributeSection(attributes: AttributeSpec[]): string {
 
 function buildEscalationSection(
   escalationGuidance: EscalationGuidanceSpec[],
+  previousWasOffer: boolean,
+  preMatchedRules: EscalationRuleInput[],
 ): string {
-  if (escalationGuidance.length === 0) return "";
-  const blocks = escalationGuidance
-    .map((g) => `- ${g.title || "Escalation rule"}: ${g.content.trim()}`)
-    .join("\n");
-  return [
-    "=== ESCALATION GUIDANCE ===",
-    "Decide whether this conversation should be handed off to a human agent. Use ONLY the escalation guidance below — do not invent reasons.",
-    "- Set `escalate` to true ONLY when the latest customer message (in context of the conversation) clearly matches one of the guidelines below.",
-    "- When escalating, put a SHORT plain-text reason (max 1 sentence, quoting the trigger) into `escalationReason`.",
-    "- When not escalating, set `escalate` to false and `escalationReason` to an empty string.",
-    "- If you escalate, your main `response` should acknowledge the customer briefly and let them know a human will take over — do not attempt to answer the original question.",
-    "",
-    blocks,
-    "=== END ESCALATION GUIDANCE ===",
-  ].join("\n");
+  const sections: string[] = [];
+
+  sections.push(
+    [
+      "=== ESCALATION DECISION ===",
+      "Decide whether this conversation should be handed off to a human agent. Consider BOTH configured guidance (below) and baseline signals.",
+      "",
+      "BASELINE SIGNALS — always watch for these, even when no guidance matches:",
+      "  - `direct_human_request`: customer explicitly asks to talk to a human/agent/person/representative (e.g., \"can I talk to a human\", \"connect me to someone\", \"I want to speak to a person\").",
+      "  - `keyword_agent_support`: customer mentions \"agent\" or \"support\" in a way that implies wanting human help.",
+      "  - `how_to_contact`: customer asks how to contact support or get help from a human.",
+      "  - `anger_frustration`: customer expresses strong frustration or anger (e.g., \"this is ridiculous\", \"waste of time\", \"I'm furious\", repeated complaints, sarcasm, insults).",
+      "  - `repetition_loop`: scan the last 3–5 user turns — the customer is repeating the same question/issue without making progress, or the assistant keeps giving the same answer.",
+      "  - `first_turn_escalation`: the customer's VERY FIRST message is itself a request for escalation, a complaint, or a statement of frustration.",
+      "",
+      "Set `baselineTriggers` to the array of signals that apply (may be empty). Prefer empty when unsure.",
+      "",
+      "GUIDANCE MATCHING:",
+      "- Set `escalate` to true ONLY when the latest customer message (in context of the conversation) clearly matches one of the guidance entries below.",
+      "- When matching guidance, set `chosenGuidanceId` to the id of the matched guidance.",
+      "- Put a SHORT plain-text reason (max 1 sentence, quoting the trigger) into `escalationReason`.",
+      "- If no guidance matches, `escalate` must be false, `chosenGuidanceId` empty, `escalationReason` empty.",
+      "",
+      "RESPONSE CONTENT:",
+      "- If baseline `direct_human_request` applies, OR guidance/rule matches with `mode: offer` or `mode: immediate`, OR a PRE-MATCHED RULE (below) applies, write your `response` as a BRIEF acknowledgment that offers to connect with a human. Do NOT attempt to answer the original question in that case.",
+      "- For `mode: immediate`, phrase the response as a direct reassurance that a human will take over (e.g., \"I'll connect you with someone from our team right away.\").",
+      "- For `mode: offer`, phrase the response as an offer the customer can accept or decline (e.g., \"I can connect you with a human — would you like me to do that?\").",
+      "- If the matched guidance has `mode: ask_more`, write `response` as a specific follow-up question to clarify the situation.",
+      "- If the matched guidance has `mode: never`, continue answering the customer normally and do NOT offer human handoff.",
+      "- Otherwise, answer normally.",
+    ].join("\n"),
+  );
+
+  if (preMatchedRules.length > 0) {
+    const blocks = preMatchedRules
+      .map((r) => {
+        const mode = r.mode ?? "immediate";
+        const title = r.title || "Untitled rule";
+        return `- title: ${title} | mode: ${mode}`;
+      })
+      .join("\n");
+    sections.push(
+      [
+        "PRE-MATCHED RULES (server-evaluated — these WILL trigger escalation for this turn; write your response to match their mode):",
+        "",
+        blocks,
+      ].join("\n"),
+    );
+  }
+
+  if (escalationGuidance.length > 0) {
+    const blocks = escalationGuidance
+      .map((g) => {
+        const id = g._id ?? "unknown";
+        const mode = g.mode ?? "immediate";
+        const title = g.title || "Escalation rule";
+        return `- id: "${id}" | mode: ${mode} | title: ${title}\n  guidance: ${g.content.trim()}`;
+      })
+      .join("\n");
+    sections.push(["CONFIGURED GUIDANCE:", "", blocks].join("\n"));
+  } else if (preMatchedRules.length === 0) {
+    sections.push(
+      "CONFIGURED GUIDANCE: (none) — rely only on baseline signals.",
+    );
+  }
+
+  if (previousWasOffer) {
+    sections.push(
+      [
+        "OFFER FOLLOW-UP:",
+        "- The previous assistant message was an OFFER to connect with a human.",
+        "- Classify the customer's latest reply into `offerResponse`:",
+        '  - "accepted" — the customer wants to be connected (e.g., "yes", "please", "connect me", "sure", "ok").',
+        '  - "declined" — the customer declined (e.g., "no", "not yet", "keep trying", "let\'s continue").',
+        '  - "unclear" — the reply does not clearly accept or decline.',
+        "- If `accepted`: write `response` as a brief confirmation (\"Connecting you now.\"). If `declined`: continue answering the original question normally. If `unclear`: repeat the offer succinctly.",
+      ].join("\n"),
+    );
+  } else {
+    sections.push(
+      "OFFER FOLLOW-UP: The previous assistant turn was NOT an offer. Set `offerResponse` to \"not_applicable\".",
+    );
+  }
+
+  sections.push("=== END ESCALATION DECISION ===");
+  return sections.join("\n\n");
 }
 
 function buildSystemPrompt(
@@ -212,6 +306,8 @@ function buildSystemPrompt(
   sources: Source[],
   attributes: AttributeSpec[],
   escalationGuidance: EscalationGuidanceSpec[],
+  previousWasOffer: boolean,
+  preMatchedRules: EscalationRuleInput[],
 ): string {
   const sections: string[] = [];
   const grounded = sources.length > 0;
@@ -281,7 +377,11 @@ function buildSystemPrompt(
   const attrSection = buildAttributeSection(attributes);
   if (attrSection) sections.push(attrSection);
 
-  const escalationSection = buildEscalationSection(escalationGuidance);
+  const escalationSection = buildEscalationSection(
+    escalationGuidance,
+    previousWasOffer,
+    preMatchedRules,
+  );
   if (escalationSection) sections.push(escalationSection);
 
   sections.push(
@@ -381,7 +481,35 @@ function buildResponseSchema(
         ? "Short plain-text reason describing which guideline triggered escalation. Empty string when escalate is false."
         : "No escalation guidance is configured; return an empty string.",
   };
-  required.push("escalate", "escalationReason");
+  properties.chosenGuidanceId = {
+    type: "string",
+    description:
+      escalationGuidanceCount > 0
+        ? "When escalate is true, set this to the id of the matched guidance entry (copy it verbatim from CONFIGURED GUIDANCE). Empty string when escalate is false or no guidance matches."
+        : "No escalation guidance is configured; return an empty string.",
+  };
+  properties.baselineTriggers = {
+    type: "array",
+    items: {
+      type: "string",
+      enum: BASELINE_TRIGGERS,
+    },
+    description:
+      "Baseline escalation signals that apply to the latest user message. May be empty. See BASELINE SIGNALS in the system prompt for the meaning of each value.",
+  };
+  properties.offerResponse = {
+    type: "string",
+    enum: ["accepted", "declined", "unclear", "not_applicable"],
+    description:
+      'Classification of whether the latest user message accepts/declines a prior human-handoff offer. Use "not_applicable" when the previous assistant turn was not an offer.',
+  };
+  required.push(
+    "escalate",
+    "escalationReason",
+    "chosenGuidanceId",
+    "baselineTriggers",
+    "offerResponse",
+  );
 
   return {
     name: "agent_reply",
@@ -445,7 +573,12 @@ export async function POST(request: NextRequest) {
 
   let conversationId: Id<"conversations"> | null =
     (body.conversationId as Id<"conversations"> | null | undefined) ?? null;
-  if (!conversationId && activeAttributes.length > 0) {
+  const hasEscalationConfigured =
+    activeEscalationRules.length > 0 || activeEscalationGuidance.length > 0;
+  if (
+    !conversationId &&
+    (activeAttributes.length > 0 || hasEscalationConfigured)
+  ) {
     try {
       conversationId = await fetchMutation(api.conversations.start, {});
     } catch (err) {
@@ -456,16 +589,53 @@ export async function POST(request: NextRequest) {
   const lastUserMessage =
     [...body.messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
-  let sources: Source[] = [];
-  try {
-    const result = await fetchAction(api.rag.searchKnowledge, {
-      query: lastUserMessage,
-      limit: 10,
+  type OfferContext = {
+    _id: Id<"conversations">;
+    offerState: "none" | "offered" | "accepted" | "declined";
+    lastAssistantAction: "normal" | "offer" | "escalated";
+    lastOfferAt: number | null;
+  };
+
+  const offerContextPromise: Promise<OfferContext | null> = conversationId
+    ? fetchQuery(api.conversations.getOfferContext, { conversationId }).catch(
+        (err) => {
+          console.error("getOfferContext failed:", err);
+          return null;
+        },
+      )
+    : Promise.resolve(null);
+
+  const sourcesPromise: Promise<Source[]> = fetchAction(
+    api.rag.searchKnowledge,
+    { query: lastUserMessage, limit: 10 },
+  )
+    .then((result) => result.sources)
+    .catch((err) => {
+      console.error("RAG search failed:", err);
+      return [] as Source[];
     });
-    sources = result.sources;
-  } catch (err) {
-    console.error("RAG search failed:", err);
-  }
+
+  const [offerContext, sources] = await Promise.all([
+    offerContextPromise,
+    sourcesPromise,
+  ]);
+
+  const previousWasOffer = offerContext?.lastAssistantAction === "offer";
+
+  // Pre-evaluate non-attribute rule conditions (message_content, detected_language,
+  // turn_count) before the LLM runs. If any match, tell the LLM about them so it
+  // writes a proper handoff acknowledgment instead of a generic answer we'd have
+  // to rewrite after the fact. Attribute-dependent rules are evaluated post-LLM
+  // since detections come from the same call.
+  const preLLMTurnCount = body.messages.filter((m) => m.role === "user").length;
+  const { matched: preMatchedRules } = evaluateRulesPreLLM(
+    activeEscalationRules,
+    {
+      messageContent: lastUserMessage,
+      detectedLanguage: detectLanguageHeuristic(lastUserMessage),
+      turnCount: preLLMTurnCount,
+    },
+  );
 
   const systemPrompt = buildSystemPrompt(
     activeGuidance,
@@ -473,6 +643,8 @@ export async function POST(request: NextRequest) {
     sources,
     activeAttributes,
     activeEscalationGuidance,
+    previousWasOffer,
+    preMatchedRules,
   );
   const responseSchema = buildResponseSchema(
     activeGuidance.length,
@@ -600,6 +772,9 @@ export async function POST(request: NextRequest) {
       let rawDetections: Array<{ attributeId: string; valueId: string | null }> = [];
       let llmEscalate = false;
       let llmEscalationReason = "";
+      let chosenGuidanceId: string | null = null;
+      let baselineTriggers: BaselineTrigger[] = [];
+      let offerResponse: OfferResponseKind = "not_applicable";
       try {
         const parsed = JSON.parse(rawJson) as {
           response?: unknown;
@@ -609,6 +784,9 @@ export async function POST(request: NextRequest) {
           attributeDetections?: unknown;
           escalate?: unknown;
           escalationReason?: unknown;
+          chosenGuidanceId?: unknown;
+          baselineTriggers?: unknown;
+          offerResponse?: unknown;
         };
         if (typeof parsed.response === "string") finalResponse = parsed.response;
         if (typeof parsed.followUp === "string") followUp = parsed.followUp.trim();
@@ -635,6 +813,30 @@ export async function POST(request: NextRequest) {
         if (typeof parsed.escalationReason === "string") {
           llmEscalationReason = parsed.escalationReason.trim();
         }
+        if (typeof parsed.chosenGuidanceId === "string") {
+          const trimmed = parsed.chosenGuidanceId.trim();
+          chosenGuidanceId = trimmed.length > 0 ? trimmed : null;
+        }
+        if (Array.isArray(parsed.baselineTriggers)) {
+          baselineTriggers = Array.from(
+            new Set(
+              parsed.baselineTriggers.filter(
+                (v): v is BaselineTrigger =>
+                  typeof v === "string" && isBaselineTrigger(v),
+              ),
+            ),
+          );
+        }
+        if (typeof parsed.offerResponse === "string") {
+          if (
+            parsed.offerResponse === "accepted" ||
+            parsed.offerResponse === "declined" ||
+            parsed.offerResponse === "unclear" ||
+            parsed.offerResponse === "not_applicable"
+          ) {
+            offerResponse = parsed.offerResponse;
+          }
+        }
       } catch {
         // partial parse fallback
         try {
@@ -642,6 +844,10 @@ export async function POST(request: NextRequest) {
           if (typeof partial?.response === "string") finalResponse = partial.response;
           if (typeof partial?.followUp === "string") followUp = partial.followUp.trim();
         } catch {}
+      }
+
+      if (!previousWasOffer) {
+        offerResponse = "not_applicable";
       }
 
       // Flush any final tail that wasn't emitted yet
@@ -693,11 +899,6 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Evaluate escalation — rules win over LLM guidance
-      let escalate = false;
-      let escalationReason: string | null = null;
-      let escalationTriggeredBy: "rule" | "guidance" | null = null;
-      let escalationRuleTitles: string[] = [];
       let matchedRules: EscalationRuleInput[] = [];
       if (activeEscalationRules.length > 0) {
         const turnCount = body.messages.filter((m) => m.role === "user").length;
@@ -711,18 +912,77 @@ export async function POST(request: NextRequest) {
           turnCount,
         });
         matchedRules = matched;
-        if (matched.length > 0) {
-          escalate = true;
-          escalationTriggeredBy = "rule";
-          escalationRuleTitles = matched.map((r) => r.title || "Untitled rule");
-          escalationReason = `Matched rule${matched.length === 1 ? "" : "s"}: ${escalationRuleTitles.join(", ")}`;
+      }
+
+      const matchedRuleChoices: RuleChoice[] = matchedRules.map((r) => ({
+        ...r,
+        mode: r.mode ?? "immediate",
+      }));
+
+      let chosenGuidance: GuidanceChoice | null = null;
+      if (chosenGuidanceId) {
+        const match = activeEscalationGuidance.find(
+          (g) => g._id === chosenGuidanceId,
+        );
+        if (match) {
+          chosenGuidance = {
+            _id: match._id,
+            title: match.title,
+            mode: match.mode ?? "immediate",
+          };
         }
       }
-      if (!escalate && llmEscalate && activeEscalationGuidance.length > 0) {
-        escalate = true;
-        escalationTriggeredBy = "guidance";
-        escalationReason = llmEscalationReason || null;
+
+      const decision = resolveEscalationDecision({
+        matchedRules: matchedRuleChoices,
+        llmEscalate,
+        llmEscalationReason: llmEscalationReason || null,
+        chosenGuidance,
+        baselineTriggers,
+      });
+
+      const offerAccepted =
+        previousWasOffer && offerResponse === "accepted";
+
+      // Double-offer guardrail: if the previous turn was already an offer and
+      // we would offer again without an acceptance, force immediate to avoid looping.
+      let forcedByDoubleOffer = false;
+      let effectiveMode: EscalationMode = decision.mode;
+      let effectiveTriggeredBy: EscalationTriggeredBy | null =
+        decision.triggeredBy;
+      let effectiveReason: string | null = decision.reason;
+
+      if (offerAccepted) {
+        effectiveMode = "immediate";
+        effectiveTriggeredBy = decision.triggeredBy ?? "baseline";
+        effectiveReason =
+          decision.reason ?? "Customer accepted the offer to connect with a human.";
+      } else if (previousWasOffer && decision.mode === "offer") {
+        forcedByDoubleOffer = true;
+        effectiveMode = "immediate";
+        effectiveTriggeredBy = decision.triggeredBy;
+        effectiveReason =
+          decision.reason ??
+          "Repeated offer — escalating to a human after a second prompt.";
       }
+
+      const escalate = effectiveMode === "immediate";
+      const escalationTriggeredBy: EscalationTriggeredBy | null = escalate
+        ? effectiveTriggeredBy
+        : null;
+      const escalationReason: string | null = escalate ? effectiveReason : null;
+      const escalationRuleTitles =
+        escalate && decision.triggeredBy === "rule" ? decision.ruleTitles : [];
+
+      const offerSuggestedReplies =
+        effectiveMode === "offer"
+          ? ["Yes, connect me with a human", "No, keep trying"]
+          : [];
+      const offerAcknowledged: "accepted" | "declined" | null =
+        previousWasOffer &&
+        (offerResponse === "accepted" || offerResponse === "declined")
+          ? offerResponse
+          : null;
 
       emit({
         type: "done",
@@ -738,6 +998,12 @@ export async function POST(request: NextRequest) {
         escalationReason,
         escalationTriggeredBy,
         escalationRuleTitles,
+        decisionMode: effectiveMode,
+        baselineTriggers,
+        topBaselineTrigger: decision.topBaselineTrigger,
+        offerSuggestedReplies,
+        offerAcknowledged,
+        forcedByDoubleOffer,
       });
       controller.close();
 
@@ -763,6 +1029,7 @@ export async function POST(request: NextRequest) {
         statsTasks.push(
           fetchMutation(api.escalationRules.recordMatch, {
             ids: matchedRules.map((r) => r._id as Id<"escalationRules">),
+            ...(conversationId ? { conversationId } : {}),
           }).catch((err) => {
             console.error("recordMatch failed:", err);
           }),
@@ -778,10 +1045,67 @@ export async function POST(request: NextRequest) {
           fetchMutation(api.escalationGuidance.recordUse, {
             ids: guidanceIds,
             escalated: escalationTriggeredBy === "guidance",
+            ...(conversationId ? { conversationId } : {}),
           }).catch((err) => {
             console.error("recordUse failed:", err);
           }),
         );
+      }
+
+      if (conversationId) {
+        const convId = conversationId;
+        if (previousWasOffer && offerAcknowledged) {
+          statsTasks.push(
+            fetchMutation(api.conversations.recordOfferResponse, {
+              conversationId: convId,
+              accepted: offerAcknowledged === "accepted",
+            }).catch((err) => {
+              console.error("recordOfferResponse failed:", err);
+            }),
+          );
+        }
+
+        const nextAction: "normal" | "offer" | "escalated" = escalate
+          ? "escalated"
+          : effectiveMode === "offer"
+            ? "offer"
+            : "normal";
+
+        if (nextAction === "offer") {
+          statsTasks.push(
+            fetchMutation(api.conversations.recordOffer, {
+              conversationId: convId,
+            }).catch((err) => {
+              console.error("recordOffer failed:", err);
+            }),
+          );
+        } else {
+          statsTasks.push(
+            fetchMutation(api.conversations.recordAssistantAction, {
+              conversationId: convId,
+              action: nextAction,
+            }).catch((err) => {
+              console.error("recordAssistantAction failed:", err);
+            }),
+          );
+        }
+
+        if (escalate) {
+          const source = decisionSourceForAnalytics(decision, offerAccepted);
+          if (source) {
+            statsTasks.push(
+              fetchMutation(api.conversations.recordEscalationSource, {
+                conversationId: convId,
+                source,
+                ...(decision.topBaselineTrigger
+                  ? { baselineTrigger: decision.topBaselineTrigger }
+                  : {}),
+              }).catch((err) => {
+                console.error("recordEscalationSource failed:", err);
+              }),
+            );
+          }
+        }
       }
 
       if (statsTasks.length > 0) {

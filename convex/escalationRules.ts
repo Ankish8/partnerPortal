@@ -65,15 +65,23 @@ export const listEnabled = query({
   },
 });
 
+const modeValidator = v.union(v.literal("immediate"), v.literal("offer"));
+
 export const create = mutation({
   args: {
     title: v.string(),
     conditionGroups: v.array(conditionGroupValidator),
+    mode: v.optional(modeValidator),
+    audience: v.optional(v.string()),
+    channels: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("escalationRules", {
       title: args.title,
       enabled: false,
+      mode: args.mode ?? "immediate",
+      audience: args.audience ?? "Everyone",
+      channels: args.channels ?? "All channels",
       conditionGroups: args.conditionGroups,
       stats: { matched: 0 },
     });
@@ -86,6 +94,9 @@ export const update = mutation({
     title: v.optional(v.string()),
     enabled: v.optional(v.boolean()),
     conditionGroups: v.optional(v.array(conditionGroupValidator)),
+    mode: v.optional(modeValidator),
+    audience: v.optional(v.string()),
+    channels: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, ...fields } = args;
@@ -94,6 +105,9 @@ export const update = mutation({
     if (fields.enabled !== undefined) updates.enabled = fields.enabled;
     if (fields.conditionGroups !== undefined)
       updates.conditionGroups = fields.conditionGroups;
+    if (fields.mode !== undefined) updates.mode = fields.mode;
+    if (fields.audience !== undefined) updates.audience = fields.audience;
+    if (fields.channels !== undefined) updates.channels = fields.channels;
     await ctx.db.patch(id, updates);
   },
 });
@@ -106,14 +120,38 @@ export const remove = mutation({
 });
 
 export const recordMatch = mutation({
-  args: { ids: v.array(v.id("escalationRules")) },
+  args: {
+    ids: v.array(v.id("escalationRules")),
+    conversationId: v.optional(v.id("conversations")),
+  },
   handler: async (ctx, args) => {
     for (const id of args.ids) {
       const rule = await ctx.db.get(id);
       if (!rule) continue;
       await ctx.db.patch(id, {
-        stats: { matched: rule.stats.matched + 1 },
+        stats: {
+          ...rule.stats,
+          matched: rule.stats.matched + 1,
+        },
       });
+    }
+
+    if (args.conversationId) {
+      const conversation = await ctx.db.get(args.conversationId);
+      if (!conversation) return;
+      const existing = new Set(conversation.matchedRuleIds ?? []);
+      let changed = false;
+      for (const id of args.ids) {
+        if (!existing.has(id)) {
+          existing.add(id);
+          changed = true;
+        }
+      }
+      if (changed) {
+        await ctx.db.patch(args.conversationId, {
+          matchedRuleIds: Array.from(existing),
+        });
+      }
     }
   },
 });

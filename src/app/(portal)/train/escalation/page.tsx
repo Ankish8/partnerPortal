@@ -81,6 +81,9 @@ export default function EscalationPage() {
         _id: r._id,
         title: r.title,
         enabled: r.enabled,
+        mode: r.mode ?? "immediate",
+        audience: r.audience ?? "Everyone",
+        channels: r.channels ?? "All channels",
         conditionGroups: r.conditionGroups.map((g) => ({
           id: g.id,
           conditions: g.conditions.map((c) => ({ ...c })),
@@ -111,6 +114,9 @@ export default function EscalationPage() {
     const draft: EscalationRuleDraft = {
       title: "",
       enabled: false,
+      mode: "immediate",
+      audience: "Everyone",
+      channels: "All channels",
       conditionGroups: [],
       stats: { matched: 0 },
     };
@@ -136,12 +142,18 @@ export default function EscalationPage() {
           id: draft._id,
           title: draft.title,
           enabled: draft.enabled,
+          mode: draft.mode,
+          audience: draft.audience,
+          channels: draft.channels,
           conditionGroups,
         });
       } else {
         const newId = await createRule({
           title: draft.title,
           conditionGroups,
+          mode: draft.mode,
+          audience: draft.audience,
+          channels: draft.channels,
         });
         if (draft.enabled) {
           await updateRule({ id: newId, enabled: true });
@@ -171,6 +183,7 @@ export default function EscalationPage() {
       enabled: false,
       audience: "Everyone",
       channels: "All channels",
+      mode: "immediate",
       isNew: true,
     });
   }, []);
@@ -185,6 +198,7 @@ export default function EscalationPage() {
           enabled: updated.enabled,
           audience: updated.audience,
           channels: updated.channels,
+          mode: updated.mode,
         });
       } else {
         await createGuidance({
@@ -192,6 +206,7 @@ export default function EscalationPage() {
           content: updated.content,
           audience: updated.audience,
           channels: updated.channels,
+          mode: updated.mode,
         });
       }
       setSelectedGuidance(null);
@@ -223,6 +238,9 @@ export default function EscalationPage() {
           _id: r._id as unknown as string,
           title: r.title,
           enabled: true,
+          mode: r.mode,
+          audience: r.audience,
+          channels: r.channels,
           conditionGroups: r.conditionGroups.map((g) => ({
             id: g.id,
             conditions: g.conditions
@@ -237,7 +255,12 @@ export default function EscalationPage() {
     () =>
       (guidanceQuery ?? [])
         .filter((g) => g.enabled && g.content.trim().length > 0)
-        .map((g) => ({ _id: g._id, title: g.title, content: g.content })),
+        .map((g) => ({
+          _id: g._id,
+          title: g.title,
+          content: g.content,
+          mode: g.mode ?? "immediate",
+        })),
     [guidanceQuery],
   );
 
@@ -390,7 +413,9 @@ export default function EscalationPage() {
                       title={g.title}
                       content={g.content}
                       enabled={g.enabled}
+                      mode={g.mode ?? "immediate"}
                       used={g.stats.used}
+                      resolved={g.stats.resolved}
                       escalated={g.stats.escalated}
                       isLast={i === filteredGuidance.length - 1}
                       onClick={() =>
@@ -401,6 +426,7 @@ export default function EscalationPage() {
                           enabled: g.enabled,
                           audience: g.audience,
                           channels: g.channels,
+                          mode: g.mode ?? "immediate",
                         })
                       }
                     />

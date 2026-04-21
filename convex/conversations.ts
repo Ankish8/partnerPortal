@@ -1,13 +1,104 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+
+export const getOfferContext = query({
+  args: { conversationId: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const conv = await ctx.db.get(args.conversationId);
+    if (!conv) return null;
+    return {
+      _id: conv._id,
+      offerState: conv.offerState ?? "none",
+      lastAssistantAction: conv.lastAssistantAction ?? "normal",
+      lastOfferAt: conv.lastOfferAt ?? null,
+    };
+  },
+});
 
 export const start = mutation({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.insert("conversations", {
       detections: [],
+      offerState: "none",
+      lastAssistantAction: "normal",
     });
+  },
+});
+
+export const recordOffer = mutation({
+  args: { conversationId: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const conv = await ctx.db.get(args.conversationId);
+    if (!conv) return;
+    await ctx.db.patch(args.conversationId, {
+      offerState: "offered",
+      lastOfferAt: Date.now(),
+      lastAssistantAction: "offer",
+    });
+  },
+});
+
+export const recordOfferResponse = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    accepted: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const conv = await ctx.db.get(args.conversationId);
+    if (!conv) return;
+    await ctx.db.patch(args.conversationId, {
+      offerState: args.accepted ? "accepted" : "declined",
+    });
+  },
+});
+
+export const recordAssistantAction = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    action: v.union(
+      v.literal("normal"),
+      v.literal("offer"),
+      v.literal("escalated"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const conv = await ctx.db.get(args.conversationId);
+    if (!conv) return;
+    await ctx.db.patch(args.conversationId, {
+      lastAssistantAction: args.action,
+    });
+  },
+});
+
+export const recordEscalationSource = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    source: v.union(
+      v.literal("baseline"),
+      v.literal("rule"),
+      v.literal("guidance"),
+      v.literal("offer_accepted"),
+    ),
+    baselineTrigger: v.optional(
+      v.union(
+        v.literal("direct_human_request"),
+        v.literal("anger_frustration"),
+        v.literal("repetition_loop"),
+        v.literal("first_turn_escalation"),
+        v.literal("keyword_agent_support"),
+        v.literal("how_to_contact"),
+      ),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const conv = await ctx.db.get(args.conversationId);
+    if (!conv) return;
+    const patch: Record<string, unknown> = { escalationSource: args.source };
+    if (args.baselineTrigger !== undefined) {
+      patch.baselineTrigger = args.baselineTrigger;
+    }
+    await ctx.db.patch(args.conversationId, patch);
   },
 });
 
@@ -20,7 +111,6 @@ export const recordDetection = mutation({
   handler: async (ctx, args) => {
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) return;
-    if (conversation.outcome) return;
 
     const attribute = await ctx.db.get(args.attributeId);
     if (!attribute) return;
@@ -75,75 +165,5 @@ export const recordDetection = mutation({
         },
       },
     });
-  },
-});
-
-export const end = mutation({
-  args: {
-    conversationId: v.id("conversations"),
-    outcome: v.union(v.literal("resolved"), v.literal("escalated")),
-  },
-  handler: async (ctx, args) => {
-    const conversation = await ctx.db.get(args.conversationId);
-    if (!conversation) return;
-    if (conversation.outcome) return;
-
-    await ctx.db.patch(args.conversationId, {
-      outcome: args.outcome,
-      endedAt: Date.now(),
-    });
-
-    const valuesByAttribute = new Map<Id<"attributes">, Set<string>>();
-    for (const d of conversation.detections) {
-      let set = valuesByAttribute.get(d.attributeId);
-      if (!set) {
-        set = new Set();
-        valuesByAttribute.set(d.attributeId, set);
-      }
-      set.add(d.valueId);
-    }
-
-    for (const [attributeId, valueIds] of valuesByAttribute) {
-      const attribute = (await ctx.db.get(attributeId)) as
-        | Doc<"attributes">
-        | null;
-      if (!attribute) continue;
-      const currentStats = attribute.stats;
-      const currentValueStats = attribute.valueStats ?? {};
-      const nextValueStats: Record<
-        string,
-        { conversations: number; resolved: number; escalated: number }
-      > = { ...currentValueStats };
-      for (const valueId of valueIds) {
-        const entry = nextValueStats[valueId] ?? {
-          conversations: 0,
-          resolved: 0,
-          escalated: 0,
-        };
-        nextValueStats[valueId] = {
-          ...entry,
-          resolved:
-            args.outcome === "resolved" ? entry.resolved + 1 : entry.resolved,
-          escalated:
-            args.outcome === "escalated"
-              ? entry.escalated + 1
-              : entry.escalated,
-        };
-      }
-      await ctx.db.patch(attributeId, {
-        stats: {
-          ...currentStats,
-          resolved:
-            args.outcome === "resolved"
-              ? (currentStats.resolved ?? 0) + 1
-              : currentStats.resolved,
-          escalated:
-            args.outcome === "escalated"
-              ? (currentStats.escalated ?? 0) + 1
-              : currentStats.escalated,
-        },
-        valueStats: nextValueStats,
-      });
-    }
   },
 });

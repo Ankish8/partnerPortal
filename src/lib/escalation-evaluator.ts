@@ -29,6 +29,9 @@ export interface EscalationRuleInput {
   _id: string;
   title: string;
   enabled: boolean;
+  mode?: "immediate" | "offer";
+  audience?: string;
+  channels?: string;
   conditionGroups: Array<{ id: string; conditions: EscalationCondition[] }>;
 }
 
@@ -104,6 +107,42 @@ export function evaluateEscalationRules(
 ): { matched: EscalationRuleInput[] } {
   return {
     matched: rules.filter((r) => r.enabled && evaluateRule(r, ctx)),
+  };
+}
+
+export type PreLLMContext = Omit<EscalationContext, "attributeDetections">;
+
+// Evaluates rules without attribute detections (not yet available pre-LLM).
+// A condition group matches only if every non-attribute condition passes
+// AND it has at least one non-attribute condition (so attribute-only groups
+// are never pre-matched — those are resolved after the LLM responds).
+function evaluateRulePreLLM(
+  rule: EscalationRuleInput,
+  ctx: PreLLMContext,
+): boolean {
+  if (rule.conditionGroups.length === 0) return false;
+  const proxyCtx: EscalationContext = { ...ctx, attributeDetections: [] };
+  return rule.conditionGroups.some((group) => {
+    const nonAttribute = group.conditions.filter(
+      (c) => c.kind !== "attribute",
+    );
+    if (nonAttribute.length === 0) return false;
+    const hasAttribute = group.conditions.length !== nonAttribute.length;
+    if (hasAttribute) return false;
+    return nonAttribute.every((c) => evaluateCondition(c, proxyCtx));
+  });
+}
+
+// Pre-LLM pass: finds rules whose conditions can be decided before attribute
+// detection runs. The chat route uses this to tell the LLM "rule X will match —
+// write a brief handoff acknowledgment in mode Y" so it doesn't produce a
+// generic reply that we'd then need to rewrite.
+export function evaluateRulesPreLLM(
+  rules: EscalationRuleInput[],
+  ctx: PreLLMContext,
+): { matched: EscalationRuleInput[] } {
+  return {
+    matched: rules.filter((r) => r.enabled && evaluateRulePreLLM(r, ctx)),
   };
 }
 
