@@ -116,6 +116,16 @@ export default defineSchema({
       resolved: v.optional(v.number()),
       escalated: v.optional(v.number()),
     }),
+    valueStats: v.optional(
+      v.record(
+        v.string(),
+        v.object({
+          conversations: v.number(),
+          resolved: v.number(),
+          escalated: v.number(),
+        }),
+      ),
+    ),
   }).index("by_enabled", ["enabled"]),
 
   // Conversations — preview-panel sessions used for attribute counters

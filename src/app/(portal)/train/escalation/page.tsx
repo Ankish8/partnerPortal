@@ -241,6 +241,32 @@ export default function EscalationPage() {
     [guidanceQuery],
   );
 
+  const enabledAttributesForPreview = useMemo(
+    () =>
+      (attributesData ?? [])
+        .filter(
+          (a) =>
+            a.enabled && a.values.length >= 2 && a.title.trim().length > 0,
+        )
+        .map((a) => ({
+          id: a._id,
+          title: a.title,
+          description: a.description,
+          values: a.values.map((v) => ({
+            id: v.id,
+            name: v.name,
+            description: v.description,
+          })),
+          conditions: a.conditions.map((c) => ({
+            id: c.id,
+            ifAttributeId: c.ifAttributeId as string,
+            ifValueId: c.ifValueId,
+            useValueIds: c.useValueIds,
+          })),
+        })),
+    [attributesData],
+  );
+
   const hasRules = filteredRules.length > 0;
   const hasGuidance = filteredGuidance.length > 0;
 
@@ -410,6 +436,7 @@ export default function EscalationPage() {
       {/* Preview panel */}
       <GuidancePreviewPanel
         personality={personality}
+        attributes={enabledAttributesForPreview}
         escalationRules={enabledRulesForPreview}
         escalationGuidance={enabledGuidanceForPreview}
       />

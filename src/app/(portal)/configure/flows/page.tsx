@@ -78,7 +78,7 @@ export default function FlowsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge className={flow.status === "active" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : ""}>{flow.status}</Badge>
+                  <Badge variant={flow.status === "active" ? "success" : "outline"}>{flow.status}</Badge>
                   <Button size="icon" variant="ghost"><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
                 </div>

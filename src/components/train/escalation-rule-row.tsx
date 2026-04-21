@@ -77,13 +77,7 @@ export function EscalationRuleTableRow({ rule, attributes, isLast, onClick }: Pr
         </p>
       </div>
       <div>
-        <Badge
-          variant="outline"
-          className={cn(
-            "text-[12px] font-normal",
-            rule.enabled ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "",
-          )}
-        >
+        <Badge variant={rule.enabled ? "success" : "outline"}>
           {rule.enabled ? "Live" : "Draft"}
         </Badge>
       </div>

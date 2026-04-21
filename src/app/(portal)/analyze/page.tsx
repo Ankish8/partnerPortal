@@ -32,11 +32,11 @@ const topIntents = [
   { name: "Refund Request", count: 162, percentage: 13 },
 ];
 
-const statusStyles = {
-  resolved: "bg-emerald-100 text-emerald-700",
-  escalated: "bg-amber-100 text-amber-700",
-  ongoing: "bg-gray-100 text-gray-700",
-};
+const statusVariant = {
+  resolved: "success",
+  escalated: "outline",
+  ongoing: "outline",
+} as const;
 
 export default function AnalyzePage() {
   return (
@@ -96,7 +96,7 @@ export default function AnalyzePage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium">{conv.customer}</p>
-                      <Badge className={`${statusStyles[conv.status]} hover:${statusStyles[conv.status]}`}>{conv.status}</Badge>
+                      <Badge variant={statusVariant[conv.status]}>{conv.status}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {conv.intent} &middot; {conv.messages} messages &middot; {conv.duration}

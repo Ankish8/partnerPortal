@@ -224,13 +224,7 @@ export function AttributesDetailPanel({
         <h2 className="text-[17px] font-semibold truncate">
           {state._id ? "Edit attribute" : "New attribute"}
         </h2>
-        <Badge
-          variant="outline"
-          className={cn(
-            "text-[11px] font-normal shrink-0",
-            state.enabled && "border-emerald-200 bg-emerald-50 text-emerald-700",
-          )}
-        >
+        <Badge variant={state.enabled ? "success" : "outline"} className="shrink-0">
           {state.enabled ? "Enabled" : "Disabled"}
         </Badge>
       </div>

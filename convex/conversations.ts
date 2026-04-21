@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 
 export const start = mutation({
   args: {},
@@ -52,6 +52,13 @@ export const recordDetection = mutation({
       ],
     });
 
+    const currentValueStats = attribute.valueStats ?? {};
+    const existingEntry = currentValueStats[args.valueId] ?? {
+      conversations: 0,
+      resolved: 0,
+      escalated: 0,
+    };
+
     await ctx.db.patch(args.attributeId, {
       stats: {
         ...currentStats,
@@ -59,6 +66,13 @@ export const recordDetection = mutation({
         conversations: hadPriorForAttribute
           ? (currentStats.conversations ?? 0)
           : (currentStats.conversations ?? 0) + 1,
+      },
+      valueStats: {
+        ...currentValueStats,
+        [args.valueId]: {
+          ...existingEntry,
+          conversations: existingEntry.conversations + 1,
+        },
       },
     });
   },
@@ -79,16 +93,43 @@ export const end = mutation({
       endedAt: Date.now(),
     });
 
-    const distinctAttributeIds = new Set(
-      conversation.detections.map((d) => d.attributeId),
-    );
+    const valuesByAttribute = new Map<Id<"attributes">, Set<string>>();
+    for (const d of conversation.detections) {
+      let set = valuesByAttribute.get(d.attributeId);
+      if (!set) {
+        set = new Set();
+        valuesByAttribute.set(d.attributeId, set);
+      }
+      set.add(d.valueId);
+    }
 
-    for (const attributeId of distinctAttributeIds) {
+    for (const [attributeId, valueIds] of valuesByAttribute) {
       const attribute = (await ctx.db.get(attributeId)) as
         | Doc<"attributes">
         | null;
       if (!attribute) continue;
       const currentStats = attribute.stats;
+      const currentValueStats = attribute.valueStats ?? {};
+      const nextValueStats: Record<
+        string,
+        { conversations: number; resolved: number; escalated: number }
+      > = { ...currentValueStats };
+      for (const valueId of valueIds) {
+        const entry = nextValueStats[valueId] ?? {
+          conversations: 0,
+          resolved: 0,
+          escalated: 0,
+        };
+        nextValueStats[valueId] = {
+          ...entry,
+          resolved:
+            args.outcome === "resolved" ? entry.resolved + 1 : entry.resolved,
+          escalated:
+            args.outcome === "escalated"
+              ? entry.escalated + 1
+              : entry.escalated,
+        };
+      }
       await ctx.db.patch(attributeId, {
         stats: {
           ...currentStats,
@@ -101,6 +142,7 @@ export const end = mutation({
               ? (currentStats.escalated ?? 0) + 1
               : currentStats.escalated,
         },
+        valueStats: nextValueStats,
       });
     }
   },

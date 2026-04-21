@@ -95,7 +95,7 @@ export default function TagsPage() {
         <div className="flex items-center gap-2 mb-3">
           <ShieldCheck className="h-4 w-4 text-green-600" />
           <h2 className="text-sm font-semibold">Non-sensitive Tags</h2>
-          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">{normalTags.length}</Badge>
+          <Badge variant="success">{normalTags.length}</Badge>
         </div>
         <div className="space-y-2">
           {normalTags.map((tag) => <TagCard key={tag.id} tag={tag} isSensitive={false} />)}

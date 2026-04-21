@@ -3,6 +3,7 @@
 import { SlidePanel } from "@/components/ui/slide-panel";
 import { SlidePanelFooter } from "@/components/ui/slide-panel-footer";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Globe,
   FileText,
@@ -13,7 +14,6 @@ import {
   CheckCircle2,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export interface KnowledgeEntry {
   id: string;
@@ -111,16 +111,9 @@ export function KnowledgeDetailPanel({ open, onClose, entry }: Props) {
               <p className="text-[11px] text-muted-foreground mb-1.5">
                 Status
               </p>
-              <span
-                className={cn(
-                  "inline-flex items-center rounded-full px-2 py-0.5 text-[12px] font-medium",
-                  entry.status === "active"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-gray-100 text-gray-600"
-                )}
-              >
+              <Badge variant={entry.status === "active" ? "success" : "outline"}>
                 {entry.status}
-              </span>
+              </Badge>
             </div>
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5">

@@ -56,7 +56,7 @@ export default function IntentsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="text-sm font-semibold">{intent.name}</p>
-                      <Badge variant={intent.flowLinked ? "default" : "secondary"} className={intent.flowLinked ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : ""}>
+                      <Badge variant={intent.flowLinked ? "success" : "outline"}>
                         {intent.flowLinked ? "Flow linked" : "No flow"}
                       </Badge>
                       <Badge variant="outline"><SourceIcon className="h-3 w-3 mr-1" /> {sourceLabels[intent.source]}</Badge>

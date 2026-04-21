@@ -287,15 +287,7 @@ function GuidanceItemTableRow({
         <p className="text-[13px] text-muted-foreground line-clamp-1 mt-0.5">{item.content}</p>
       </div>
       <div>
-        <Badge
-          variant="outline"
-          className={cn(
-            "text-[12px] font-normal",
-            item.enabled
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : ""
-          )}
-        >
+        <Badge variant={item.enabled ? "success" : "outline"}>
           {item.enabled ? "Live" : "Draft"}
         </Badge>
       </div>

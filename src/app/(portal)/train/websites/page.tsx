@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -347,9 +348,7 @@ export default function WebsitesDetailPage() {
               {visibleColumns.has("status") && (
                 <div>
                   {page.status === "live" ? (
-                    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[12px] font-medium text-emerald-700">
-                      Live
-                    </span>
+                    <Badge variant="success">Live</Badge>
                   ) : (
                     <span className="text-[13px] text-muted-foreground">
                       Excluded

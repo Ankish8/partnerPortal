@@ -61,10 +61,7 @@ export function IntentDetailPanel({ open, onClose, intent }: Props) {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-[15px] font-semibold">{intent.name}</h2>
-            <Badge
-              variant="secondary"
-              className="text-[11px] px-1.5 py-0 font-medium"
-            >
+            <Badge variant={intent.flowLinked ? "success" : "outline"}>
               {intent.flowLinked ? "Enabled" : "Draft"}
             </Badge>
           </div>
@@ -168,16 +165,9 @@ export function IntentDetailPanel({ open, onClose, intent }: Props) {
                 <p className="text-[11px] text-muted-foreground mb-1.5">
                   Status
                 </p>
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full px-2 py-0.5 text-[12px] font-medium",
-                    intent.flowLinked
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-gray-100 text-gray-600"
-                  )}
-                >
+                <Badge variant={intent.flowLinked ? "success" : "outline"}>
                   {intent.flowLinked ? "Flow linked" : "No flow"}
-                </span>
+                </Badge>
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground mb-1.5">

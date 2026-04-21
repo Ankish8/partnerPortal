@@ -91,11 +91,11 @@ export default function DocumentsPage() {
                         {doc.type.split("/").pop()?.toUpperCase() || "FILE"} &middot; {formatFileSize(doc.size)} &middot; Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
                       </p>
                     </div>
-                    <Badge className={doc.status === "ready" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : "bg-amber-100 text-amber-700 hover:bg-amber-100"}>
+                    <Badge variant={doc.status === "ready" ? "success" : "outline"}>
                       {doc.status === "ready" ? (
-                        <><CheckCircle2 className="h-3 w-3 mr-1" /> Indexed</>
+                        <><CheckCircle2 /> Indexed</>
                       ) : (
-                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Processing</>
+                        <><Loader2 className="animate-spin" /> Processing</>
                       )}
                     </Badge>
                     <Button

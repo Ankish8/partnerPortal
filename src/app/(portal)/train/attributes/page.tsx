@@ -322,6 +322,7 @@ export default function AttributesPage() {
                   conversations={a.stats?.conversations ?? 0}
                   resolved={a.stats?.resolved ?? 0}
                   escalated={a.stats?.escalated ?? 0}
+                  valueStats={a.valueStats}
                   isLast={i === attributes.length - 1}
                   isExpanded={expanded.has(a._id)}
                   onToggleExpand={() => toggleExpanded(a._id)}
@@ -366,6 +367,7 @@ function AttributeRow({
   conversations,
   resolved,
   escalated,
+  valueStats,
   isLast,
   isExpanded,
   onToggleExpand,
@@ -378,6 +380,10 @@ function AttributeRow({
   conversations: number;
   resolved: number;
   escalated: number;
+  valueStats?: Record<
+    string,
+    { conversations: number; resolved: number; escalated: number }
+  >;
   isLast: boolean;
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -449,35 +455,38 @@ function AttributeRow({
       </div>
       {isExpanded && values.length > 0 && (
         <div className="bg-muted/10 border-t border-border/40">
-          {values.map((v) => (
-            <div
-              key={v.id}
-              className="grid grid-cols-[minmax(180px,1.5fr)_1fr_1fr_1fr_1.2fr_1fr_1fr] items-center gap-4 px-5 py-2.5 border-b border-border/30 last:border-b-0"
-            >
-              <div className="flex items-center gap-2 min-w-0 pl-7">
-                <span className="text-muted-foreground text-[12px]">↳</span>
-                <span className="text-[13px] text-foreground/80 truncate">
-                  {v.name}
+          {values.map((v) => {
+            const entry = valueStats?.[v.id];
+            return (
+              <div
+                key={v.id}
+                className="grid grid-cols-[minmax(180px,1.5fr)_1fr_1fr_1fr_1.2fr_1fr_1fr] items-center gap-4 px-5 py-2.5 border-b border-border/30 last:border-b-0"
+              >
+                <div className="flex items-center gap-2 min-w-0 pl-7">
+                  <span className="text-muted-foreground text-[12px]">↳</span>
+                  <span className="text-[13px] text-foreground/80 truncate">
+                    {v.name}
+                  </span>
+                </div>
+                <span className="text-[13px] text-muted-foreground/70">
+                  —
+                </span>
+                <span />
+                <span className="text-[13px] text-muted-foreground/70">
+                  —
+                </span>
+                <span className="text-[13px] text-muted-foreground/70">
+                  {entry?.conversations ?? 0}
+                </span>
+                <span className="text-[13px] text-muted-foreground/70">
+                  {entry?.resolved ?? 0}
+                </span>
+                <span className="text-[13px] text-muted-foreground/70">
+                  {entry?.escalated ?? 0}
                 </span>
               </div>
-              <span className="text-[13px] text-muted-foreground/70">
-                —
-              </span>
-              <span />
-              <span className="text-[13px] text-muted-foreground/70">
-                —
-              </span>
-              <span className="text-[13px] text-muted-foreground/70">
-                0
-              </span>
-              <span className="text-[13px] text-muted-foreground/70">
-                0
-              </span>
-              <span className="text-[13px] text-muted-foreground/70">
-                0
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

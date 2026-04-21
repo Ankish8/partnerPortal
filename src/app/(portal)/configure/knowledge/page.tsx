@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -233,12 +234,8 @@ export default function KnowledgePage() {
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[12px] font-medium text-emerald-700">
-                {activeCount} Active
-              </span>
-              <span className="rounded-full border border-border px-2.5 py-0.5 text-[12px] font-medium text-muted-foreground">
-                {inactiveCount} Inactive
-              </span>
+              <Badge variant="success">{activeCount} Active</Badge>
+              <Badge variant="outline">{inactiveCount} Inactive</Badge>
             </div>
           </div>
 
@@ -375,14 +372,12 @@ export default function KnowledgePage() {
                               <h3 className="text-[15px] font-medium leading-snug">
                                 {entry.question}
                               </h3>
-                              <span className={cn(
-                                "inline-flex items-center shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                                entry.status === "active"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-gray-100 text-gray-500"
-                              )}>
+                              <Badge
+                                variant={entry.status === "active" ? "success" : "outline"}
+                                className="shrink-0"
+                              >
                                 {entry.status}
-                              </span>
+                              </Badge>
                             </div>
                             <p className="text-[14px] text-muted-foreground leading-relaxed line-clamp-2 mb-2">
                               {entry.answer}
